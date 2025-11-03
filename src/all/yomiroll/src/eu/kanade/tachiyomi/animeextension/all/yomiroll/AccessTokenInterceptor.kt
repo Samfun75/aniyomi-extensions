@@ -32,7 +32,7 @@ class AccessTokenInterceptor(
         val response = chain.proceed(request)
 
         when (response.code) {
-            HttpURLConnection.HTTP_UNAUTHORIZED -> {
+            HttpURLConnection.HTTP_UNAUTHORIZED, 498 -> {
                 synchronized(this) {
                     response.close()
                     // Access token is refreshed in another thread. Check if it has changed.
