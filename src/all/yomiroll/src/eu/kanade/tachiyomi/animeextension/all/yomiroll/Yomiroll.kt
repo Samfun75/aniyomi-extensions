@@ -553,8 +553,6 @@ class Yomiroll :
                 .body
                 .use { it.string() }
 
-        Log.i("Yomiroll", "Widevine license response: $resp")
-
         val licenseB64 = JSON.decodeFromString<LicenseResponse>(resp).license
         val license = Base64.decode(licenseB64)
 
@@ -564,12 +562,6 @@ class Yomiroll :
             .getKeys(sessionId, KeyType.CONTENT)
             .map {
                 Pair(DecryptionType.CENC_DECRYPTION_KEY, it.key.toHexString())
-            }.also {
-                Log.i(
-                    "Yomiroll",
-                    it.joinToString { keyPair -> "${keyPair.first}: ${keyPair.second}" },
-                )
-                cdm.close(sessionId)
             }
     }
 
