@@ -14,6 +14,10 @@ android {
     namespace = "eu.kanade.tachiyomi.lib.${name.replace("-", "")}"
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
 versionCatalogs
     .named("libs")
     .findBundle("common")
