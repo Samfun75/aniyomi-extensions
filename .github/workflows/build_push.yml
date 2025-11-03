@@ -10,169 +10,202 @@ on:
       - '!.github/**'
       - '.github/scripts/**'
       - '.github/workflows/build_push.yml'
+  # Manual trigger
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 env:
   CI_CHUNK_SIZE: 65
+  IS_PR_CHECK: false
 
 jobs:
   prepare:
     name: Prepare job
-    runs-on: ubuntu-latest
+    runs-on: 'ubuntu-24.04'
     outputs:
-      individualMatrix: ${{ steps.generate-matrices.outputs.individualMatrix }}
+      latestCommitMessage: ${{ steps.set-env.outputs.LATEST_COMMIT_MESSAGE }}
+      matrix: ${{ steps.generate-matrices.outputs.matrix }}
+      delete: ${{ steps.generate-matrices.outputs.delete }}
     steps:
-      - name: Clone repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Checkout ${{ github.ref_name }} branch
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          ref: master
-          token: ${{ secrets.ANIYOMIORG_BOT_PAT }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set env
+        id: set-env
+        run: |
+          echo "LATEST_COMMIT_MESSAGE<<{delimiter}
+          $(git log -1 --pretty=%B)
+
+          Built on commit: $(git log -1 --pretty=%H)
+          {delimiter}" >> $GITHUB_OUTPUT
 
       - name: Find lib changes
         id: modified-libs
-        uses: tj-actions/changed-files@90a06d6ba9543371ab4df8eeca0be07ca6054959 #v42
+        uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47.0.0
         with:
           files: lib/
           files_ignore: lib/**.md
           files_separator: " "
           safe_output: false
 
-      - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 # v6.1.0
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-
         # This step is going to commit, but this will not trigger another workflow.
+        # If any changes to lib/ caused on master branch, bump the extensions that uses the modified lib.
+        # If any changes caused by the merge commit, skip this step because versions should already pumped with that merge.
+        # But that should be avoided because our own extensions may not be bumped.
       - name: Bump extensions that uses a modified lib
         if: steps.modified-libs.outputs.any_changed == 'true'
+        env:
+          COMMIT_MESSAGE: ${{ steps.set-env.outputs.LATEST_COMMIT_MESSAGE }}
         run: |
-          ./.github/scripts/bump-versions.py ${{ steps.modified-libs.outputs.all_changed_files }}
+          latest_commit_author=$(git log -1 --pretty=%an)
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          chmod +x ./.github/scripts/bump-versions.py
+          ./.github/scripts/bump-versions.py "$COMMIT_MESSAGE" ${{ steps.modified-libs.outputs.all_changed_files }}
+          git push
 
-      - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@a494d935f4b56874c4a5a87d19af7afcf3a163d0 # v2
-
-      - name: Get number of modules
-        run: |
-          set -x
-          projects=(src/*/*)
-
-          echo "NUM_INDIVIDUAL_MODULES=${#projects[@]}" >> $GITHUB_ENV
-
-      - id: generate-matrices
-        name: Create output matrices
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
-        with:
-          script: |
-            const numIndividualModules = process.env.NUM_INDIVIDUAL_MODULES;
-            const chunkSize = process.env.CI_CHUNK_SIZE;
-
-            const numIndividualChunks = Math.ceil(numIndividualModules / chunkSize);
-
-            console.log(`Individual modules: ${numIndividualModules} (${numIndividualChunks} chunks of ${chunkSize})`);
-
-            core.setOutput('individualMatrix', { 'chunk': [...Array(numIndividualChunks).keys()] });
-
-  build_individual:
-    name: Build individual modules
-    needs: prepare
-    runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare.outputs.individualMatrix) }}
-    steps:
-      - name: Checkout master branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-        with:
-          ref: master
-
-      - name: Set up JDK
-        uses: actions/setup-java@387ac29b308b003ca37ba93a6cab5eb57c8f5f93 # v4
+      - name: Set up Java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
         with:
           java-version: 17
           distribution: temurin
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
+        with:
+          cache-read-only: true
+
+      - name: Get last successful CI commit
+        id: last_successful_ci_commit
+        uses: nrwl/nx-set-shas@826660b82addbef3abff5fa871492ebad618c9e1 # v4.3.3
+        with:
+          main-branch-name: ${{ github.ref_name }}
+
+      - id: generate-matrices
+        name: Create output matrices
+        run: |
+          python ./.github/scripts/generate-build-matrices.py ${{ steps.last_successful_ci_commit.outputs.base }} Release
+
+  build:
+    name: Build extensions (${{ matrix.chunk.number }})
+    needs: prepare
+    runs-on: 'ubuntu-24.04'
+    if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout ${{ github.ref_name }} branch
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Set up Java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
+        with:
+          cache-read-only: ${{ matrix.chunk.number > 1 }}
+
       - name: Prepare signing key
         run: |
           echo ${{ secrets.SIGNING_KEY }} | base64 -d > signingkey.jks
+          chmod 600 signingkey.jks
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5 # v3
-
-      - name: Build extensions (chunk ${{ matrix.chunk }})
+      - name: Build extensions (${{ matrix.chunk.number }})
         env:
-          CI_CHUNK_NUM: ${{ matrix.chunk }}
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew -p src assembleRelease
+        run: |
+          ./gradlew $(echo '${{ toJson(matrix.chunk.modules) }}' | jq -r 'join(" ")')
 
-      - name: Upload APKs (chunk ${{ matrix.chunk }})
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
-        if: "github.repository == 'aniyomiorg/aniyomi-extensions'"
+      - name: Upload APKs (${{ matrix.chunk.number }})
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: github.repository == 'samfun75/aniyomi-extensions'
         with:
-          name: "individual-apks-${{ matrix.chunk }}"
+          name: "individual-apks-${{ matrix.chunk.number }}"
           path: "**/*.apk"
           retention-days: 1
 
       - name: Clean up CI files
         run: rm signingkey.jks
 
-  publish_repo:
-    name: Publish repo
-    needs:
-      - build_individual
-    if: "github.repository == 'aniyomiorg/aniyomi-extensions'"
-    runs-on: ubuntu-latest
+  publish:
+    name: Publish extension repo
+    needs: [prepare, build]
+    if: github.repository == 'samfun75/aniyomi-extensions'
+    runs-on: 'ubuntu-24.04'
     steps:
       - name: Download APK artifacts
-        uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           path: ~/apk-artifacts
 
       - name: Set up JDK
-        uses: actions/setup-java@387ac29b308b003ca37ba93a6cab5eb57c8f5f93 # v4
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
         with:
           java-version: 17
           distribution: temurin
 
-      - name: Checkout master branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - name: Checkout ${{ github.ref_name }} branch
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          ref: master
-          path: master
+          ref: ${{ github.ref_name }}
+          path: ${{ github.ref_name }}
 
       - name: Create repo artifacts
         run: |
-          cd master
-          python ./.github/scripts/move-apks.py
-          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/aniyomiorg/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
+          cd ${{ github.ref_name }}
+          python ./.github/scripts/move-built-apks.py
+          INSPECTOR_LINK="$(curl -s "https://api.github.com/repos/komikku-app/aniyomi-extensions-inspector/releases/latest" | jq -r '.assets[0].browser_download_url')"
           curl -L "$INSPECTOR_LINK" -o ./Inspector.jar
           java -jar ./Inspector.jar "repo/apk" "output.json" "tmp"
           python ./.github/scripts/create-repo.py
 
       - name: Checkout repo branch
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          repository: aniyomiorg/aniyomi-extensions
-          token: ${{ secrets.ANIYOMIORG_BOT_PAT }}
+          repository: samfun75/aniyomi-repo
+          token: ${{ secrets.BOT_PAT }}
           ref: repo
           path: repo
 
-      - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@01dd5d3ca463c7f10f7f4f7b4f177225ac661ee4 # v6.1.0
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          git_user_signingkey: true
-          git_commit_gpgsign: true
-          workdir: repo
-
-      - name: Deploy repo
+      - name: Merge repo
         run: |
           cd repo
-          ../master/.github/scripts/commit-repo.sh
+          python ../${{ github.ref_name }}/.github/scripts/merge-repo.py '${{ needs.prepare.outputs.delete }}' '${{ github.ref_name }}/repo'
+
+      - name: Deploy repo
+        uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9.1.4
+        with:
+          message: "${{ needs.prepare.outputs.latestCommitMessage }}"
+          cwd: "./repo"
+          # committer_name: github-actions[bot]
+          # committer_email: github-actions[bot]@users.noreply.github.com
+
+      - name: Sync repo
+        env:
+          COMMIT_MESSAGE: ${{ needs.prepare.outputs.latestCommitMessage }}
+        run: |
+          cd repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://github.com/samfun75/aniyomi-repo.git
+          git fetch origin
+          git reset origin/repo
+          git add -A
+          git commit --amend -m "$COMMIT_MESSAGE" --no-sign --allow-empty || echo "No changes to commit"
+          git push origin HEAD:repo --force
