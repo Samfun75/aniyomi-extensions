@@ -7,9 +7,8 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.internal.commonEmptyHeaders
 
-class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = commonEmptyHeaders) {
+class PlaylistUtils(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
 
     // ================================ M3U8 ================================
 
@@ -90,9 +89,8 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         if (PLAYLIST_SEPARATOR !in masterPlaylist) {
             return listOf(
                 Video(
-                    playlistUrl,
-                    videoNameGen("Video"),
-                    playlistUrl,
+                    videoUrl = playlistUrl,
+                    videoTitle = videoNameGen("Video"),
                     headers = masterHeaders,
                     subtitleTracks = subtitleList,
                     audioTracks = audioList,
@@ -136,9 +134,8 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             } ?: return@mapNotNull null
 
             Video(
-                videoUrl,
-                videoNameGen(resolution),
-                videoUrl,
+                videoUrl =  videoUrl,
+                videoTitle = videoNameGen(resolution),
                 headers = videoHeadersGen(headers, referer, videoUrl),
                 subtitleTracks = subtitleTracks,
                 audioTracks = audioTracks,
@@ -304,9 +301,8 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             val videoUrl = videoSrc.text()
 
             Video(
-                videoUrl,
-                videoNameGen(res, bandwidth),
-                videoUrl,
+                videoUrl = videoUrl,
+                videoTitle = videoNameGen(res, bandwidth),
                 audioTracks = audioTracks,
                 subtitleTracks = subtitleList,
                 headers = videoHeadersGen(headers, referer, videoUrl),
