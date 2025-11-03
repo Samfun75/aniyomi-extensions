@@ -4,7 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-enum class DecryptionType(val type: String) {
+enum class DecryptionType(
+    val type: String,
+) {
     CRYPTO_KEY("cryptokey"),
     DECRYPTION_KEY("decryption_key"),
     CENC_DECRYPTION_KEY("cenc_decryption_key"),
@@ -22,7 +24,9 @@ data class AccessToken(
 )
 
 @Serializable
-data class TokenError(val code: String? = null)
+data class TokenError(
+    val code: String? = null,
+)
 
 @Serializable
 data class Policy(
@@ -161,7 +165,9 @@ data class HosterData(
 )
 
 @Serializable
-data class LicenseResponse(val license: String)
+data class LicenseResponse(
+    val license: String,
+)
 
 @Serializable
 data class VideoStreams(
@@ -196,6 +202,21 @@ data class AnilistResult(
     @Serializable
     data class Media(
         val status: String,
+    )
+}
+
+@Serializable
+data class MediaSegmentsResponse(
+    val intro: MediaSegment? = null,
+    val credits: MediaSegment? = null,
+    val preview: MediaSegment? = null,
+    val recap: MediaSegment? = null,
+) {
+    @Serializable
+    data class MediaSegment(
+        val type: String,
+        val start: Double,
+        val end: Double,
     )
 }
 
