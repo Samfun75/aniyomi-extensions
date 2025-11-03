@@ -12,10 +12,12 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.ChapterType
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
+import eu.kanade.tachiyomi.animesource.model.TimeStamp
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
@@ -23,12 +25,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.parallelCatchingFlatMap
 import eu.kanade.tachiyomi.util.parallelCatchingFlatMapBlocking
+import eu.kanade.tachiyomi.util.parseAs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.jsonObject
 import okhttp3.CookieJar
 import okhttp3.FormBody
@@ -51,9 +54,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
-@ExperimentalSerializationApi
 class Yomiroll :
     AnimeHttpSource(),
     ConfigurableAnimeSource {
@@ -188,11 +189,7 @@ class Yomiroll :
             }
             """.trimIndent()
 
-        val requestBody =
-            FormBody
-                .Builder()
-                .add("query", query)
-                .build()
+        val requestBody = FormBody.Builder().add("query", query).build()
 
         val response =
             noTokenClient
@@ -277,34 +274,38 @@ class Yomiroll :
                 .string()
         val episodes = JSON.decodeFromString<EpisodeResult>(body)
 
-        return episodes.data.sortedBy { it.episode_number }.mapNotNull EpisodeMap@{ ep ->
+        return episodes.data.sortedBy { it.episodeNumber }.mapNotNull EpisodeMap@{ ep ->
             SEpisode.create().apply {
                 url =
                     EpisodeData(
-                        ep.versions?.map { Triple(it.mediaId, it.audio_locale, ep.episodeId) }
+                        ep.versions?.map { Triple(it.mediaId, it.audioLocale, it.isPremiumOnly.toString()) }
                             ?: listOf(
                                 Triple(
-                                    ep.streams_link
+                                    ep.streamsLink
                                         ?.substringAfter("videos/")
-                                        ?.substringBefore("/streams")
-                                        ?: return@EpisodeMap null,
-                                    ep.audio_locale,
+                                        ?.substringBefore("/streams") ?: return@EpisodeMap null,
+                                    ep.audioLocale,
                                     ep.episodeId,
                                 ),
                             ),
                     ).toJsonString()
                 name =
-                    if (ep.episode_number > 0 && ep.episode.isNumeric()) {
-                        "Season ${seasonData.season_number} Ep ${DF.format(ep.episode_number)}: " + ep.title
+                    if (ep.episodeNumber > 0 && ep.episode.isNumeric()) {
+                        "Season ${seasonData.season_number} Ep ${DF.format(ep.episodeNumber)}: " + ep.title
                     } else {
                         ep.title
                     }
-                episode_number = ep.episode_number
+                episode_number = ep.episodeNumber
                 date_upload = ep.airDate?.let(::parseDate) ?: 0L
                 scanlator = ep.versions
-                    ?.sortedBy { it.audio_locale }
-                    ?.joinToString { it.audio_locale.substringBefore("-") }
-                    ?: ep.audio_locale.substringBefore("-")
+                    ?.sortedBy { it.audioLocale }
+                    ?.joinToString {
+                        buildString {
+                            append(it.audioLocale.substringBefore("-"))
+                            if (it.isPremiumOnly) append("💰")
+                        }
+                    }
+                    ?: ep.audioLocale.substringBefore("-")
             }
         }
     }
@@ -324,7 +325,11 @@ class Yomiroll :
             listOf(
                 Hoster(
                     hosterUrl = HosterData(idData).toJsonString(),
-                    hosterName = idData.second.getLocale(),
+                    hosterName =
+                        buildString {
+                            append(idData.second.getLocale())
+                            if (idData.third == "true") append(" 💰")
+                        },
                     lazy = idData.second != dubLocale,
                 ),
             )
@@ -343,11 +348,25 @@ class Yomiroll :
     // ============================= Utilities ==============================
 
     private suspend fun extractVideo(media: Triple<String, String, String>): List<Video> {
-        val (mediaId, aud, episodeId) = media
+        runCatching {
+            preferences.wvdDevice.ifBlank { throw Exception("No Widevine device") }
+            Device.loads(preferences.wvdDevice)
+        }.getOrElse { err ->
+            Log.e(
+                "Yomiroll",
+                "Failed to load Widevine device from preferences: ${err.localizedMessage}",
+            )
+            throw Exception("WVD: ${err.localizedMessage}")
+        }
+
+        val (mediaId, aud, isPremiumOnly) = media
         Log.i(
             "Yomiroll",
-            "Extracting video for mediaId: $mediaId, aud: $aud, episodeId: $episodeId",
+            "Extracting video for mediaId: $mediaId, aud: $aud, isPremiumOnly: $isPremiumOnly",
         )
+
+        if (isPremiumOnly == "true") throw Exception("Media $mediaId is premium only")
+
         val response =
             client
                 .newCall(getVideoRequest(mediaId))
@@ -365,182 +384,194 @@ class Yomiroll :
                         val sub = JSON.decodeFromString<Subtitle>(value.jsonObject.toString())
                         sub.url?.let { Track(it, sub.language.getLocale()) }
                     }?.sortedWith(
-                        compareByDescending<Track> { it.lang.contains(subLocale) }
-                            .thenBy { it.lang },
+                        compareByDescending<Track> { it.lang.contains(subLocale) }.thenBy { it.lang },
                     )
             }.getOrNull() ?: emptyList()
 
-        val audLang = aud.ifBlank { streams.audioLocale } ?: "ja-JP"
-        val vids = getStreams(streams, audLang, subsList, mediaId)
-        Log.i("Yomiroll", "Extracted ${vids.size} videos for episodeId: $episodeId")
-        vids.forEach { vid -> Log.i("Yomiroll", "${vid.resolution} - ${vid.videoUrl}") }
-        return vids
+        return getStreams(streams, subsList, mediaId)
     }
 
     private suspend fun getStreams(
         streams: VideoStreams,
-        audLang: String,
         subsList: List<Track>,
         mediaId: String,
-    ): List<Video> =
-        runCatching {
-            Log.i("Yomiroll", "Getting streams for mediaId: $mediaId")
-            val playlist = client.newCall(GET(streams.url)).execute()
-            if (playlist.code != 200) return@runCatching null
+    ): List<Video> {
+        Log.i("Yomiroll", "Getting streams for mediaId: $mediaId")
+        val playlist = client.newCall(GET(streams.url)).execute()
+        if (playlist.code != 200) throw Exception("Failed to fetch playlist")
 
-            val playlistResp = playlist.body.use { it.string() }
-            val doc = Jsoup.parse(playlistResp, Parser.xmlParser())
+        val playlistResp = playlist.body.use { it.string() }
+        val doc = Jsoup.parse(playlistResp, Parser.xmlParser())
 
-            doc.select("adaptationset[mimetype*=text]").remove()
-            val psshB64 =
-                doc
-                    .selectFirst("contentprotection[schemeiduri*=edef8ba9-79d6-4ace-a3c8-27dcd51d21ed]")
-                    ?.text() ?: ""
+        doc.select("adaptationset[mimetype*=text]").remove()
+        val psshB64 =
+            doc
+                .selectFirst("contentprotection[schemeiduri*=edef8ba9-79d6-4ace-a3c8-27dcd51d21ed]")
+                ?.text() ?: ""
 
-            val decryptionKeys =
-                getWidevineKeyExtractor(
-                    mediaId,
-                    streams.token,
-                    psshB64,
-                )?.map { (keyType, key) -> Pair("demuxer-lavf-o", "${keyType.type}=$key") }
-                    ?: emptyList()
+        val decryptionKeys =
+            getWidevineKeyExtractor(
+                mediaId,
+                streams.token,
+                psshB64,
+            )?.map { (keyType, key) -> Pair("demuxer-lavf-o", "${keyType.type}=$key") }
+                ?: emptyList()
 
-            coroutineScope {
-                launch {
+        val skipTimes =
+            client
+                .newCall(GET("https://static.crunchyroll.com/skip-events/production/$mediaId.json".toHttpUrlOrNull()!!))
+                .execute()
+                .parseAs<MediaSegmentsResponse>()
+                .let { resp ->
+                    listOf(
+                        resp.intro,
+                        resp.credits,
+                        resp.recap,
+                        resp.preview,
+                    ).mapNotNull { timestamp ->
+                        // CR sometimes send empty object for timestamp
+                        if (
+                            timestamp == null ||
+                            timestamp.start == null ||
+                            timestamp.end == null ||
+                            timestamp.type == null
+                        ) {
+                            return@mapNotNull null
+                        }
+
+                        TimeStamp(
+                            start = timestamp.start,
+                            end = timestamp.end,
+                            name = timestamp.type.replaceFirstChar { it.uppercaseChar() },
+                            type =
+                                when (timestamp.type) {
+                                    "intro" -> ChapterType.Opening
+                                    "credits" -> ChapterType.Ending
+                                    "recap" -> ChapterType.Recap
+                                    else -> ChapterType.Other
+                                },
+                        )
+                    }
+                }
+
+        mainScope.launch {
+            async {
+                withContext(Dispatchers.IO) {
+                    delay(5_000)
                     runCatching {
                         client
                             .newCall(
                                 Request(
-                                    url =
-                                        "$baseUrl/playback/v1/token/$mediaId/${streams.token}"
-                                            .toHttpUrlOrNull()!!,
+                                    url = "$baseUrl/playback/v1/token/$mediaId/${streams.token}".toHttpUrlOrNull()!!,
                                     method = "DELETE",
                                 ),
                             ).execute()
-                            .use { Log.i("Yomiroll", "Delete active stream status: ${it.code}") }
+                            .use {
+                                Log.i(
+                                    "Yomiroll",
+                                    "Delete active stream status $mediaId: ${it.code}",
+                                )
+                            }
                     }.onFailure { e ->
                         Log.e("Yomiroll", "Failed to delete active stream token", e)
                     }
                 }
             }
+        }
 
-            val skipTimes =
-                client
-                    .newCall(GET("$baseUrl/skip-events/production/$mediaId.json".toHttpUrlOrNull()!!))
-                    .execute()
+        return doc.select("representation[mimeType*=video]").map { element ->
+            val quality = element.attr("height")
+            val docCopy = doc.clone()
 
-            doc.select("representation[id*=video]").map { element ->
-                val quality = element.attr("height")
-                val docCopy = doc.clone()
+            docCopy
+                .select("representation[mimeType*=video]")
+                .filter { it.attr("height") != quality }
+                .forEach { it.remove() }
 
-                docCopy
-                    .select("representation[id*=video]")
-                    .filter { it.attr("height") != quality }
-                    .forEach { it.remove() }
+            val modifiedDoc = docCopy.toString()
+            val file =
+                File.createTempFile("manifest-$mediaId-$quality-", ".mpd").also(File::deleteOnExit)
 
-                val modifiedDoc = docCopy.toString()
-                val file =
-                    File
-                        .createTempFile("manifest-$mediaId-$quality-", ".mpd")
-                        .also(File::deleteOnExit)
+            file.writeText(modifiedDoc)
+            val uri = Uri.fromFile(file)
 
-                file.writeText(modifiedDoc)
-                val uri = Uri.fromFile(file)
+            val args = mutableListOf<Pair<String, String>>()
+            args.addAll(decryptionKeys)
+            args.add(Pair("tls-verify", "no")) // Bypass proxy SSL issues
 
-                val args = mutableListOf<Pair<String, String>>()
-                args.addAll(decryptionKeys)
-                args.add(Pair("tls-verify", "no")) // Bypass proxy SSL issues
+            Video(
+                videoUrl = uri.toString(),
+                resolution = quality.toIntOrNull(),
+                videoTitle = "${quality}p ",
+                subtitleTracks = subsList,
+                mpvArgs = args,
+                timestamps = skipTimes,
+            )
+        }
+    }
 
-                Video(
-                    videoUrl = uri.toString(),
-                    resolution = quality.toIntOrNull(),
-                    videoTitle = "${quality}p ",
-                    subtitleTracks = subsList,
-                    mpvArgs = args,
-                )
-            }
-        }.getOrElse {
-            Log.e("Yomiroll", "Error getting streams for mediaId: $mediaId", it)
-            emptyList()
-        } ?: emptyList()
-
-    @OptIn(ExperimentalEncodingApi::class)
     private suspend fun getWidevineKeyExtractor(
         mediaId: String,
         videoToken: String,
         psshBase64: String,
-    ): List<Pair<DecryptionType, String>>? =
-        coroutineScope {
-            Log.i("Yomiroll", "Getting Widevine key for mediaId: $mediaId")
-            runCatching {
-                val device =
-                    runCatching {
-                        Device.loads(preferences.wvdDevice)
-                    }.getOrElse { err ->
-                        Log.e("Yomiroll", "Failed to load Widevine device from preferences", err)
-                        throw Exception("Failed to load Widevine device")
-                    }
+    ): List<Pair<DecryptionType, String>>? {
+        Log.i("Yomiroll", "Getting Widevine key for mediaId: $mediaId")
 
-                val cdm = Cdm.fromDevice(device)
-                val sessionId = cdm.open()
-                val pssh = PSSH(psshBase64)
+        val device = Device.loads(preferences.wvdDevice)
+        val cdm = Cdm.fromDevice(device)
+        val sessionId = cdm.open()
+        val pssh = PSSH(psshBase64)
 
-                val challenge =
-                    cdm.getLicenseChallenge(
-                        sessionId = sessionId,
-                        pssh = pssh,
-                        licenseType = LicenseType.STREAMING,
-                        privacyMode = true,
-                    )
+        val challenge =
+            cdm.getLicenseChallenge(
+                sessionId = sessionId,
+                pssh = pssh,
+                licenseType = LicenseType.STREAMING,
+                privacyMode = true,
+            )
 
-                val reqBody =
-                    challenge
-                        .toRequestBody("application/octet-stream".toMediaType())
+        val reqBody = challenge.toRequestBody("application/octet-stream".toMediaType())
 
-                val headers =
-                    headersBuilder()
-                        .add("x-cr-content-id", mediaId)
-                        .add("x-cr-video-token", videoToken)
-                        .add("Referer", "https://static.crunchyroll.com/")
-                        .add("Accept", "*/*")
-                        .add("Accept-Encoding", "*")
-                        .build()
+        val headers =
+            headersBuilder()
+                .add("x-cr-content-id", mediaId)
+                .add("x-cr-video-token", videoToken)
+                .add("Referer", "https://static.crunchyroll.com/")
+                .add("Accept", "*/*")
+                .add("Accept-Encoding", "*")
+                .build()
 
-                val resp =
-                    client
-                        .newCall(
-                            POST(
-                                "https://www.crunchyroll.com/license/v1/license/widevine",
-                                body = reqBody,
-                                headers = headers,
-                            ),
-                        ).execute()
-                        .body
-                        .use { it.string() }
+        val resp =
+            client
+                .newCall(
+                    POST(
+                        "$baseUrl/license/v1/license/widevine",
+                        body = reqBody,
+                        headers = headers,
+                    ),
+                ).execute()
+                .body
+                .use { it.string() }
 
-                Log.i("Yomiroll", "Widevine license response: $resp")
+        Log.i("Yomiroll", "Widevine license response: $resp")
 
-                val licenseB64 = JSON.decodeFromString<LicenseResponse>(resp).license
-                val license = Base64.decode(licenseB64)
+        val licenseB64 = JSON.decodeFromString<LicenseResponse>(resp).license
+        val license = Base64.decode(licenseB64)
 
-                cdm.parseLicense(sessionId, license)
+        cdm.parseLicense(sessionId, license)
 
-                cdm
-                    .getKeys(sessionId, KeyType.CONTENT)
-                    .map {
-                        Pair(DecryptionType.CENC_DECRYPTION_KEY, it.key.toHexString())
-                    }.also {
-                        Log.i(
-                            "Yomiroll",
-                            it.joinToString { keyPair -> "${keyPair.first}: ${keyPair.second}" },
-                        )
-                        cdm.close(sessionId)
-                    }
-            }.getOrElse {
-                Log.e("Yomiroll", "Error getting Widevine key for mediaId: $mediaId", it)
-                throw Exception("Failed to get Decryption Key")
+        return cdm
+            .getKeys(sessionId, KeyType.CONTENT)
+            .map {
+                Pair(DecryptionType.CENC_DECRYPTION_KEY, it.key.toHexString())
+            }.also {
+                Log.i(
+                    "Yomiroll",
+                    it.joinToString { keyPair -> "${keyPair.first}: ${keyPair.second}" },
+                )
+                cdm.close(sessionId)
             }
-        }
+    }
 
     private fun getVideoRequest(mediaId: String): Request = GET("$baseUrl/playback/v3/$mediaId/tv/android_tv/play?queue=0")
 
@@ -559,8 +590,10 @@ class Yomiroll :
                     ?.source
             url = anime?.url ?: LinkData(id, type!!).toJsonString()
             fetch_type = FetchType.Episodes
-            genre = anime?.genre ?: (series_metadata?.genres ?: movie_metadata?.genres ?: genres)
-                ?.joinToString { gen -> gen.replaceFirstChar { it.uppercase() } }
+            genre = anime?.genre ?: (
+                series_metadata?.genres ?: movie_metadata?.genres
+                    ?: genres
+            )?.joinToString { gen -> gen.replaceFirstChar { it.uppercase() } }
             status = anime?.let {
                 val media = JSON.decodeFromString<LinkData>(anime.url)
                 if (media.media_type == "series") {
@@ -583,13 +616,22 @@ class Yomiroll :
                                         ?: movie_metadata
                                 )?.subtitle_locales
                             )?.any() == true ||
-                            (series_metadata ?: movie_metadata)?.is_subbed == true ||
+                            (
+                                series_metadata
+                                    ?: movie_metadata
+                            )?.is_subbed == true ||
                             is_subbed == true
                         ) {
                             append(" Sub")
                         }
-                        if (((series_metadata?.audio_locales ?: audio_locales)?.size ?: 0) > 1 ||
-                            (series_metadata ?: movie_metadata)?.is_dubbed == true ||
+                        if ((
+                                (series_metadata?.audio_locales ?: audio_locales)?.size
+                                    ?: 0
+                            ) > 1 ||
+                            (
+                                series_metadata
+                                    ?: movie_metadata
+                            )?.is_dubbed == true ||
                             is_dubbed == true
                         ) {
                             append(" Dub")
@@ -598,17 +640,21 @@ class Yomiroll :
 
                         append("Maturity Ratings: ")
                         appendLine(
-                            ((series_metadata ?: movie_metadata)?.maturity_ratings ?: maturity_ratings)
-                                ?.joinToString() ?: "-",
+                            (
+                                (series_metadata ?: movie_metadata)?.maturity_ratings
+                                    ?: maturity_ratings
+                            )?.joinToString() ?: "-",
                         )
                         if (series_metadata?.is_simulcast == true) appendLine("Simulcast")
                         appendLine()
 
                         append("Audio: ")
                         appendLine(
-                            (series_metadata?.audio_locales ?: audio_locales ?: listOf(audio_locale ?: "-"))
-                                .sortedBy { it.getLocale() }
-                                .joinToString { it.getLocale() },
+                            (
+                                series_metadata?.audio_locales ?: audio_locales ?: listOf(
+                                    audio_locale ?: "-",
+                                )
+                            ).sortedBy { it.getLocale() }.joinToString { it.getLocale() },
                         )
                         appendLine()
 

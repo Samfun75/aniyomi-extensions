@@ -135,21 +135,26 @@ data class EpisodeResult(
     data class Episode(
         @SerialName("id")
         val episodeId: String,
-        val audio_locale: String,
+        @SerialName("audio_locale")
+        val audioLocale: String,
         val title: String,
         @SerialName("sequence_number")
-        val episode_number: Float,
+        val episodeNumber: Float,
         val episode: String? = null,
         @SerialName("episode_air_date")
         val airDate: String? = null,
         val versions: ArrayList<Version>? = null,
-        val streams_link: String? = null,
+        @SerialName("streams_link")
+        val streamsLink: String? = null,
     ) {
         @Serializable
         data class Version(
-            val audio_locale: String,
+            @SerialName("audio_locale")
+            val audioLocale: String,
             @SerialName("guid")
             val mediaId: String,
+            @SerialName("is_premium_only")
+            val isPremiumOnly: Boolean,
         )
     }
 }
@@ -214,9 +219,9 @@ data class MediaSegmentsResponse(
 ) {
     @Serializable
     data class MediaSegment(
-        val type: String,
-        val start: Double,
-        val end: Double,
+        val type: String? = null,
+        val start: Double? = null,
+        val end: Double? = null,
     )
 }
 

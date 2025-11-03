@@ -126,14 +126,16 @@ fun PreferenceScreen.addEditTextPreference(
                                 start: Int,
                                 count: Int,
                                 after: Int,
-                            ) {}
+                            ) {
+                            }
 
                             override fun onTextChanged(
                                 s: CharSequence?,
                                 start: Int,
                                 before: Int,
                                 count: Int,
-                            ) {}
+                            ) {
+                            }
 
                             override fun afterTextChanged(editable: Editable?) {
                                 requireNotNull(editable)
@@ -157,7 +159,12 @@ fun PreferenceScreen.addEditTextPreference(
                     val result = text.isBlank() || validate?.invoke(text) ?: true
 
                     if (restartRequired && result) {
-                        Toast.makeText(context, "Restart Aniyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                        Toast
+                            .makeText(
+                                context,
+                                "Restart Aniyomi to apply new setting.",
+                                Toast.LENGTH_LONG,
+                            ).show()
                     }
 
                     if (updateSummary != null && result) {
