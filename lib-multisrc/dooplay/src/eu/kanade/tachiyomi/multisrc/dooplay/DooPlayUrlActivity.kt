@@ -8,7 +8,6 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class DooPlayUrlActivity : Activity() {
-
     private val tag = "DooPlayUrlActivity"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -18,11 +17,12 @@ class DooPlayUrlActivity : Activity() {
             val path = pathSegments[0]
             val slug = pathSegments[1]
             val searchQuery = "$path/$slug"
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.ANIMESEARCH"
-                putExtra("query", "${DooPlay.PREFIX_SEARCH}$searchQuery")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.ANIMESEARCH"
+                    putExtra("query", "${DooPlay.PREFIX_SEARCH}$searchQuery")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

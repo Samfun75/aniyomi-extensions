@@ -38,22 +38,27 @@ abstract class ZoroTheme(
     override val name: String,
     override val baseUrl: String,
     private val hosterNames: List<String>,
-) : ConfigurableAnimeSource, ParsedAnimeHttpSource() {
-
+) : ParsedAnimeHttpSource(),
+    ConfigurableAnimeSource {
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
     val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        Injekt
+            .get<Application>()
+            .getSharedPreferences("source_$id", 0x0000)
             .clearOldHosts()
     }
 
-    private val docHeaders = headers.newBuilder().apply {
-        add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-        add("Host", baseUrl.toHttpUrl().host)
-        add("Referer", "$baseUrl/")
-    }.build()
+    private val docHeaders =
+        headers
+            .newBuilder()
+            .apply {
+                add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                add("Host", baseUrl.toHttpUrl().host)
+                add("Referer", "$baseUrl/")
+            }.build()
 
     protected open val ajaxRoute = ""
 
@@ -66,17 +71,19 @@ abstract class ZoroTheme(
 
     override fun popularAnimeSelector(): String = "div.flw-item"
 
-    override fun popularAnimeFromElement(element: Element) = SAnime.create().apply {
-        element.selectFirst("div.film-detail a")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
-            title = if (useEnglish && it.hasAttr("title")) {
-                it.attr("title")
-            } else {
-                it.attr("data-jname")
+    override fun popularAnimeFromElement(element: Element) =
+        SAnime.create().apply {
+            element.selectFirst("div.film-detail a")!!.let {
+                setUrlWithoutDomain(it.attr("href"))
+                title =
+                    if (useEnglish && it.hasAttr("title")) {
+                        it.attr("title")
+                    } else {
+                        it.attr("data-jname")
+                    }
             }
+            thumbnail_url = element.selectFirst("div.film-poster > img")!!.attr("data-src")
         }
-        thumbnail_url = element.selectFirst("div.film-poster > img")!!.attr("data-src")
-    }
 
     override fun popularAnimeNextPageSelector() = "li.page-item a[title=Next]"
 
@@ -92,28 +99,36 @@ abstract class ZoroTheme(
 
     // =============================== Search ===============================
 
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override fun searchAnimeRequest(
+        page: Int,
+        query: String,
+        filters: AnimeFilterList,
+    ): Request {
         val params = ZoroThemeFilters.getSearchParameters(filters)
         val endpoint = if (query.isEmpty()) "filter" else "search"
 
-        val url = "$baseUrl/$endpoint".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addIfNotBlank("keyword", query)
-            addIfNotBlank("type", params.type)
-            addIfNotBlank("status", params.status)
-            addIfNotBlank("rated", params.rated)
-            addIfNotBlank("score", params.score)
-            addIfNotBlank("season", params.season)
-            addIfNotBlank("language", params.language)
-            addIfNotBlank("sort", params.sort)
-            addIfNotBlank("sy", params.start_year)
-            addIfNotBlank("sm", params.start_month)
-            addIfNotBlank("sd", params.start_day)
-            addIfNotBlank("ey", params.end_year)
-            addIfNotBlank("em", params.end_month)
-            addIfNotBlank("ed", params.end_day)
-            addIfNotBlank("genres", params.genres)
-        }.build()
+        val url =
+            "$baseUrl/$endpoint"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("page", page.toString())
+                    addIfNotBlank("keyword", query)
+                    addIfNotBlank("type", params.type)
+                    addIfNotBlank("status", params.status)
+                    addIfNotBlank("rated", params.rated)
+                    addIfNotBlank("score", params.score)
+                    addIfNotBlank("season", params.season)
+                    addIfNotBlank("language", params.language)
+                    addIfNotBlank("sort", params.sort)
+                    addIfNotBlank("sy", params.start_year)
+                    addIfNotBlank("sm", params.start_month)
+                    addIfNotBlank("sd", params.start_day)
+                    addIfNotBlank("ey", params.end_year)
+                    addIfNotBlank("em", params.end_month)
+                    addIfNotBlank("ed", params.end_day)
+                    addIfNotBlank("genres", params.genres)
+                }.build()
 
         return GET(url, docHeaders)
     }
@@ -130,23 +145,25 @@ abstract class ZoroTheme(
 
     // =========================== Anime Details ============================
 
-    override fun animeDetailsParse(document: Document) = SAnime.create().apply {
-        thumbnail_url = document.selectFirst("div.anisc-poster img")!!.attr("src")
+    override fun animeDetailsParse(document: Document) =
+        SAnime.create().apply {
+            thumbnail_url = document.selectFirst("div.anisc-poster img")!!.attr("src")
 
-        document.selectFirst("div.anisc-info")!!.let { info ->
-            author = info.getInfo("Studios:")
-            status = parseStatus(info.getInfo("Status:"))
-            genre = info.getInfo("Genres:", isList = true)
+            document.selectFirst("div.anisc-info")!!.let { info ->
+                author = info.getInfo("Studios:")
+                status = parseStatus(info.getInfo("Status:"))
+                genre = info.getInfo("Genres:", isList = true)
 
-            description = buildString {
-                info.getInfo("Overview:")?.also { append(it + "\n") }
-                info.getInfo("Aired:", full = true)?.also(::append)
-                info.getInfo("Premiered:", full = true)?.also(::append)
-                info.getInfo("Synonyms:", full = true)?.also(::append)
-                info.getInfo("Japanese:", full = true)?.also(::append)
+                description =
+                    buildString {
+                        info.getInfo("Overview:")?.also { append(it + "\n") }
+                        info.getInfo("Aired:", full = true)?.also(::append)
+                        info.getInfo("Premiered:", full = true)?.also(::append)
+                        info.getInfo("Synonyms:", full = true)?.also(::append)
+                        info.getInfo("Japanese:", full = true)?.also(::append)
+                    }
             }
         }
-    }
 
     private fun Element.getInfo(
         tag: String,
@@ -156,19 +173,19 @@ abstract class ZoroTheme(
         if (isList) {
             return select("div.item-list:contains($tag) > a").eachText().joinToString()
         }
-        val value = selectFirst("div.item-title:contains($tag)")
-            ?.selectFirst("*.name, *.text")
-            ?.text()
+        val value =
+            selectFirst("div.item-title:contains($tag)")
+                ?.selectFirst("*.name, *.text")
+                ?.text()
         return if (full && value != null) "\n$tag $value" else value
     }
 
-    private fun parseStatus(statusString: String?): Int {
-        return when (statusString) {
+    private fun parseStatus(statusString: String?): Int =
+        when (statusString) {
             "Currently Airing" -> SAnime.ONGOING
             "Finished Airing" -> SAnime.COMPLETED
             else -> SAnime.UNKNOWN
         }
-    }
 
     // ============================== Episodes ==============================
 
@@ -182,19 +199,21 @@ abstract class ZoroTheme(
     override fun episodeListParse(response: Response): List<SEpisode> {
         val document = response.parseAs<HtmlResponse>().getHtml()
 
-        return document.select(episodeListSelector())
+        return document
+            .select(episodeListSelector())
             .map(::episodeFromElement)
             .reversed()
     }
 
-    override fun episodeFromElement(element: Element) = SEpisode.create().apply {
-        episode_number = element.attr("data-number").toFloatOrNull() ?: 1F
-        name = "Ep. ${element.attr("data-number")}: ${element.attr("title")}"
-        setUrlWithoutDomain(element.attr("href"))
-        if (element.hasClass("ssl-item-filler") && markFiller) {
-            scanlator = "Filler Episode"
+    override fun episodeFromElement(element: Element) =
+        SEpisode.create().apply {
+            episode_number = element.attr("data-number").toFloatOrNull() ?: 1F
+            name = "Ep. ${element.attr("data-number")}: ${element.attr("title")}"
+            setUrlWithoutDomain(element.attr("href"))
+            if (element.hasClass("ssl-item-filler") && markFiller) {
+                scanlator = "Filler Episode"
+            }
         }
-    }
 
     // ============================ Video Links =============================
 
@@ -218,29 +237,34 @@ abstract class ZoroTheme(
 
         val serversDoc = response.parseAs<HtmlResponse>().getHtml()
 
-        val embedLinks = listOf("servers-sub", "servers-dub", "servers-mixed").map { type ->
-            if (type !in typeSelection) return@map emptyList()
+        val embedLinks =
+            listOf("servers-sub", "servers-dub", "servers-mixed")
+                .map { type ->
+                    if (type !in typeSelection) return@map emptyList()
 
-            serversDoc.select("div.$type div.item").parallelMapNotNull {
-                val id = it.attr("data-id")
-                val type = it.attr("data-type")
-                val name = it.text()
+                    serversDoc.select("div.$type div.item").parallelMapNotNull {
+                        val id = it.attr("data-id")
+                        val type = it.attr("data-type")
+                        val name = it.text()
 
-                if (hosterSelection.contains(name, true).not()) return@parallelMapNotNull null
+                        if (hosterSelection.contains(name, true).not()) return@parallelMapNotNull null
 
-                val link = client.newCall(
-                    GET("$baseUrl/ajax$ajaxRoute/episode/sources?id=$id", apiHeaders(episodeReferer)),
-                ).await().parseAs<SourcesResponse>().link ?: ""
+                        val link =
+                            client
+                                .newCall(
+                                    GET("$baseUrl/ajax$ajaxRoute/episode/sources?id=$id", apiHeaders(episodeReferer)),
+                                ).await()
+                                .parseAs<SourcesResponse>()
+                                .link ?: ""
 
-                VideoData(type, link, name)
-            }
-        }.flatten()
+                        VideoData(type, link, name)
+                    }
+                }.flatten()
 
         return embedLinks.parallelCatchingFlatMap(::extractVideo)
     }
 
     abstract fun extractVideo(server: VideoData): List<Video>
-
 
     // ============================= Utilities ==============================
 
@@ -258,18 +282,25 @@ abstract class ZoroTheme(
         return this
     }
 
-    private fun Set<String>.contains(s: String, ignoreCase: Boolean): Boolean {
-        return any { it.equals(s, ignoreCase) }
-    }
+    private fun Set<String>.contains(
+        s: String,
+        ignoreCase: Boolean,
+    ): Boolean = any { it.equals(s, ignoreCase) }
 
-    private fun apiHeaders(referer: String): Headers = headers.newBuilder().apply {
-        add("Accept", "*/*")
-        add("Host", baseUrl.toHttpUrl().host)
-        add("Referer", referer)
-        add("X-Requested-With", "XMLHttpRequest")
-    }.build()
+    private fun apiHeaders(referer: String): Headers =
+        headers
+            .newBuilder()
+            .apply {
+                add("Accept", "*/*")
+                add("Host", baseUrl.toHttpUrl().host)
+                add("Referer", referer)
+                add("X-Requested-With", "XMLHttpRequest")
+            }.build()
 
-    private fun HttpUrl.Builder.addIfNotBlank(query: String, value: String): HttpUrl.Builder {
+    private fun HttpUrl.Builder.addIfNotBlank(
+        query: String,
+        value: String,
+    ): HttpUrl.Builder {
         if (value.isNotBlank()) {
             addQueryParameter(query, value)
         }
@@ -336,105 +367,112 @@ abstract class ZoroTheme(
     // ============================== Settings ==============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_TITLE_LANG_KEY
-            title = "Preferred title language"
-            entries = PREF_TITLE_LANG_LIST
-            entryValues = PREF_TITLE_LANG_LIST
-            setDefaultValue(PREF_TITLE_LANG_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_TITLE_LANG_KEY
+                title = "Preferred title language"
+                entries = PREF_TITLE_LANG_LIST
+                entryValues = PREF_TITLE_LANG_LIST
+                setDefaultValue(PREF_TITLE_LANG_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                Toast.makeText(screen.context, "Restart Aniyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    Toast.makeText(screen.context, "Restart Aniyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = MARK_FILLERS_KEY
-            title = "Mark filler episodes"
-            setDefaultValue(MARK_FILLERS_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(screen.context, "Restart Aniyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                preferences.edit().putBoolean(key, newValue as Boolean).commit()
-            }
-        }.also(screen::addPreference)
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = MARK_FILLERS_KEY
+                title = "Mark filler episodes"
+                setDefaultValue(MARK_FILLERS_DEFAULT)
+                setOnPreferenceChangeListener { _, newValue ->
+                    Toast.makeText(screen.context, "Restart Aniyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                    preferences.edit().putBoolean(key, newValue as Boolean).commit()
+                }
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_QUALITY_KEY
-            title = "Preferred quality"
-            entries = arrayOf("1080p", "720p", "480p", "360p")
-            entryValues = arrayOf("1080", "720", "480", "360")
-            setDefaultValue(PREF_QUALITY_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_QUALITY_KEY
+                title = "Preferred quality"
+                entries = arrayOf("1080p", "720p", "480p", "360p")
+                entryValues = arrayOf("1080", "720", "480", "360")
+                setDefaultValue(PREF_QUALITY_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_SERVER_KEY
-            title = "Preferred Server"
-            entries = hosterNames.toTypedArray()
-            entryValues = hosterNames.toTypedArray()
-            setDefaultValue(hosterNames.first())
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_SERVER_KEY
+                title = "Preferred Server"
+                entries = hosterNames.toTypedArray()
+                entryValues = hosterNames.toTypedArray()
+                setDefaultValue(hosterNames.first())
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_LANG_KEY
-            title = "Preferred Type"
-            entries = TYPES_ENTRIES
-            entryValues = TYPES_ENTRIES
-            setDefaultValue(PREF_LANG_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_LANG_KEY
+                title = "Preferred Type"
+                entries = TYPES_ENTRIES
+                entryValues = TYPES_ENTRIES
+                setDefaultValue(PREF_LANG_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_HOSTER_KEY
-            title = "Enable/Disable Hosts"
-            entries = hosterNames.toTypedArray()
-            entryValues = hosterNames.toTypedArray()
-            setDefaultValue(hosterNames.toSet())
+        MultiSelectListPreference(screen.context)
+            .apply {
+                key = PREF_HOSTER_KEY
+                title = "Enable/Disable Hosts"
+                entries = hosterNames.toTypedArray()
+                entryValues = hosterNames.toTypedArray()
+                setDefaultValue(hosterNames.toSet())
 
-            setOnPreferenceChangeListener { _, newValue ->
-                @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    @Suppress("UNCHECKED_CAST")
+                    preferences.edit().putStringSet(key, newValue as Set<String>).commit()
+                }
+            }.also(screen::addPreference)
 
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_TYPE_TOGGLE_KEY
-            title = "Enable/Disable Types"
-            entries = TYPES_ENTRIES
-            entryValues = TYPES_ENTRY_VALUES
-            setDefaultValue(PREF_TYPES_TOGGLE_DEFAULT)
+        MultiSelectListPreference(screen.context)
+            .apply {
+                key = PREF_TYPE_TOGGLE_KEY
+                title = "Enable/Disable Types"
+                entries = TYPES_ENTRIES
+                entryValues = TYPES_ENTRY_VALUES
+                setDefaultValue(PREF_TYPES_TOGGLE_DEFAULT)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                @Suppress("UNCHECKED_CAST")
-                preferences.edit().putStringSet(key, newValue as Set<String>).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    @Suppress("UNCHECKED_CAST")
+                    preferences.edit().putStringSet(key, newValue as Set<String>).commit()
+                }
+            }.also(screen::addPreference)
     }
 }

@@ -16,7 +16,9 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.injectLazy
 
-class DopeFlixExtractor(private val client: OkHttpClient) {
+class DopeFlixExtractor(
+    private val client: OkHttpClient,
+) {
     private val json: Json by injectLazy()
 
     companion object {
@@ -25,14 +27,21 @@ class DopeFlixExtractor(private val client: OkHttpClient) {
         private val MUTEX = Mutex()
         private var realIndexPairs: List<List<Int>> = emptyList()
 
-        private fun <R> runLocked(block: () -> R) = runBlocking(Dispatchers.IO) {
-            MUTEX.withLock { block() }
-        }
+        private fun <R> runLocked(block: () -> R) =
+            runBlocking(Dispatchers.IO) {
+                MUTEX.withLock { block() }
+            }
     }
 
     private fun generateIndexPairs(): List<List<Int>> {
-        val script = client.newCall(GET(SCRIPT_URL)).execute().body.string()
-        return script.substringAfter("const ")
+        val script =
+            client
+                .newCall(GET(SCRIPT_URL))
+                .execute()
+                .body
+                .string()
+        return script
+            .substringAfter("const ")
             .substringBefore("()")
             .substringBeforeLast(",")
             .split(",")
@@ -42,21 +51,21 @@ class DopeFlixExtractor(private val client: OkHttpClient) {
                     value.contains("0x") -> value.substringAfter("0x").toInt(16)
                     else -> value.toInt()
                 }
-            }
-            .drop(1)
+            }.drop(1)
             .chunked(2)
             .map(List<Int>::reversed) // just to look more like the original script
     }
 
     private fun cipherTextCleaner(data: String): Pair<String, String> {
-        val (password, ciphertext, _) = indexPairs.fold(Triple("", data, 0)) { previous, item ->
-            val start = item.first() + previous.third
-            val end = start + item.last()
-            val passSubstr = data.substring(start, end)
-            val passPart = previous.first + passSubstr
-            val cipherPart = previous.second.replace(passSubstr, "")
-            Triple(passPart, cipherPart, previous.third + item.last())
-        }
+        val (password, ciphertext, _) =
+            indexPairs.fold(Triple("", data, 0)) { previous, item ->
+                val start = item.first() + previous.third
+                val end = start + item.last()
+                val passSubstr = data.substring(start, end)
+                val passPart = previous.first + passSubstr
+                val cipherPart = previous.second.replace(passSubstr, "")
+                Triple(passPart, cipherPart, previous.third + item.last())
+            }
 
         return Pair(ciphertext, password)
     }
@@ -80,7 +89,10 @@ class DopeFlixExtractor(private val client: OkHttpClient) {
             }
         }
 
-    private fun tryDecrypting(ciphered: String, attempts: Int = 0): String {
+    private fun tryDecrypting(
+        ciphered: String,
+        attempts: Int = 0,
+    ): String {
         if (attempts > 2) throw Exception("PLEASE NUKE DOPEBOX AND SFLIX")
         val (ciphertext, password) = cipherTextCleaner(ciphered)
         return CryptoAES.decrypt(ciphertext, password).ifEmpty {
@@ -90,22 +102,29 @@ class DopeFlixExtractor(private val client: OkHttpClient) {
     }
 
     fun getVideoDto(url: String): VideoDto {
-        val id = url.substringAfter("/embed-4/", "")
-            .substringBefore("?", "").ifEmpty { throw Exception("I HATE THE ANTICHRIST") }
+        val id =
+            url
+                .substringAfter("/embed-4/", "")
+                .substringBefore("?", "")
+                .ifEmpty { throw Exception("I HATE THE ANTICHRIST") }
         val serverUrl = url.substringBefore("/embed")
-        val srcRes = client.newCall(
-            GET(
-                serverUrl + SOURCES_PATH + id,
-                headers = Headers.headersOf("x-requested-with", "XMLHttpRequest"),
-            ),
-        )
-            .execute()
-            .body.string()
+        val srcRes =
+            client
+                .newCall(
+                    GET(
+                        serverUrl + SOURCES_PATH + id,
+                        headers = Headers.headersOf("x-requested-with", "XMLHttpRequest"),
+                    ),
+                ).execute()
+                .body
+                .string()
 
         val data = json.decodeFromString<SourceResponseDto>(srcRes)
         if (!data.encrypted) return json.decodeFromString<VideoDto>(srcRes)
 
-        val ciphered = data.sources.jsonPrimitive.content.toString()
+        val ciphered =
+            data.sources.jsonPrimitive.content
+                .toString()
         val decrypted = json.decodeFromString<List<VideoLink>>(tryDecrypting(ciphered))
         return VideoDto(decrypted, data.tracks)
     }

@@ -34,8 +34,8 @@ abstract class DopeFlix(
     override val lang: String,
     private val domainArray: Array<String>,
     private val defaultDomain: String,
-) : ConfigurableAnimeSource, ParsedAnimeHttpSource() {
-
+) : ParsedAnimeHttpSource(),
+    ConfigurableAnimeSource {
     override val baseUrl by lazy {
         "https://" + preferences.getString(PREF_DOMAIN_KEY, defaultDomain)!!
     }
@@ -56,12 +56,13 @@ abstract class DopeFlix(
         return GET("$baseUrl/$type?page=$page")
     }
 
-    override fun popularAnimeFromElement(element: Element) = SAnime.create().apply {
-        val ahref = element.selectFirst("a")!!
-        setUrlWithoutDomain(ahref.attr("href"))
-        title = ahref.attr("title")
-        thumbnail_url = element.selectFirst("img")!!.attr("data-src")
-    }
+    override fun popularAnimeFromElement(element: Element) =
+        SAnime.create().apply {
+            val ahref = element.selectFirst("a")!!
+            setUrlWithoutDomain(ahref.attr("href"))
+            title = ahref.attr("title")
+            thumbnail_url = element.selectFirst("img")!!.attr("data-src")
+        }
 
     override fun popularAnimeNextPageSelector() = "ul.pagination li.page-item a[title=next]"
 
@@ -84,23 +85,30 @@ abstract class DopeFlix(
 
     override fun searchAnimeSelector() = popularAnimeSelector()
 
-    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request {
+    override fun searchAnimeRequest(
+        page: Int,
+        query: String,
+        filters: AnimeFilterList,
+    ): Request {
         val params = DopeFlixFilters.getSearchParameters(filters)
 
-        val url = if (query.isNotBlank()) {
-            val fixedQuery = query.replace(" ", "-")
-            "$baseUrl/search/$fixedQuery?page=$page"
-        } else {
-            "$baseUrl/filter".toHttpUrl().newBuilder()
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("type", params.type)
-                .addQueryParameter("quality", params.quality)
-                .addQueryParameter("release_year", params.releaseYear)
-                .addIfNotBlank("genre", params.genres)
-                .addIfNotBlank("country", params.countries)
-                .build()
-                .toString()
-        }
+        val url =
+            if (query.isNotBlank()) {
+                val fixedQuery = query.replace(" ", "-")
+                "$baseUrl/search/$fixedQuery?page=$page"
+            } else {
+                "$baseUrl/filter"
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addQueryParameter("page", page.toString())
+                    .addQueryParameter("type", params.type)
+                    .addQueryParameter("quality", params.quality)
+                    .addQueryParameter("release_year", params.releaseYear)
+                    .addIfNotBlank("genre", params.genres)
+                    .addIfNotBlank("country", params.countries)
+                    .build()
+                    .toString()
+            }
 
         return GET(url, headers)
     }
@@ -108,22 +116,25 @@ abstract class DopeFlix(
     override fun getFilterList() = DopeFlixFilters.FILTER_LIST
 
     // =========================== Anime Details ============================
-    override fun animeDetailsParse(document: Document) = SAnime.create().apply {
-        thumbnail_url = document.selectFirst("img.film-poster-img")!!.attr("src")
-        title = document.selectFirst("img.film-poster-img")!!.attr("title")
-        genre = document.select("div.row-line:contains(Genre) a").eachText().joinToString()
-        description = document.selectFirst("div.detail_page-watch div.description")!!
-            .text().replace("Overview:", "")
-        author = document.select("div.row-line:contains(Production) a").eachText().joinToString()
-        status = parseStatus(document.selectFirst("li.status span.value")?.text())
-    }
+    override fun animeDetailsParse(document: Document) =
+        SAnime.create().apply {
+            thumbnail_url = document.selectFirst("img.film-poster-img")!!.attr("src")
+            title = document.selectFirst("img.film-poster-img")!!.attr("title")
+            genre = document.select("div.row-line:contains(Genre) a").eachText().joinToString()
+            description =
+                document
+                    .selectFirst("div.detail_page-watch div.description")!!
+                    .text()
+                    .replace("Overview:", "")
+            author = document.select("div.row-line:contains(Production) a").eachText().joinToString()
+            status = parseStatus(document.selectFirst("li.status span.value")?.text())
+        }
 
-    private fun parseStatus(statusString: String?): Int {
-        return when (statusString?.trim()) {
+    private fun parseStatus(statusString: String?): Int =
+        when (statusString?.trim()) {
             "Ongoing" -> SAnime.ONGOING
             else -> SAnime.COMPLETED
         }
-    }
 
     // ============================== Episodes ==============================
     override fun episodeListSelector() = throw UnsupportedOperationException()
@@ -135,23 +146,28 @@ abstract class DopeFlix(
         val dataType = infoElement.attr("data-type") // Tv = 2 or movie = 1
         return if (dataType == "2") {
             val seasonUrl = "$baseUrl/ajax/v2/tv/seasons/$id"
-            val seasonsHtml = client.newCall(
-                GET(
-                    seasonUrl,
-                    headers = Headers.headersOf("Referer", document.location()),
-                ),
-            ).execute().asJsoup()
+            val seasonsHtml =
+                client
+                    .newCall(
+                        GET(
+                            seasonUrl,
+                            headers = Headers.headersOf("Referer", document.location()),
+                        ),
+                    ).execute()
+                    .asJsoup()
             seasonsHtml
                 .select("a.dropdown-item.ss-item")
                 .flatMap(::parseEpisodesFromSeries)
                 .reversed()
         } else {
             val movieUrl = "$baseUrl/ajax/movie/episodes/$id"
-            SEpisode.create().apply {
-                name = document.selectFirst("h2.heading-name")!!.text()
-                episode_number = 1F
-                setUrlWithoutDomain(movieUrl)
-            }.let(::listOf)
+            SEpisode
+                .create()
+                .apply {
+                    name = document.selectFirst("h2.heading-name")!!.text()
+                    episode_number = 1F
+                    setUrlWithoutDomain(movieUrl)
+                }.let(::listOf)
         }
     }
 
@@ -161,13 +177,19 @@ abstract class DopeFlix(
         val seasonId = element.attr("data-id")
         val seasonName = element.text()
         val episodesUrl = "$baseUrl/ajax/v2/season/episodes/$seasonId"
-        val episodesHtml = client.newCall(GET(episodesUrl)).execute()
-            .asJsoup()
+        val episodesHtml =
+            client
+                .newCall(GET(episodesUrl))
+                .execute()
+                .asJsoup()
         val episodeElements = episodesHtml.select("div.eps-item")
         return episodeElements.map { episodeFromElement(it, seasonName) }
     }
 
-    private fun episodeFromElement(element: Element, seasonName: String) = SEpisode.create().apply {
+    private fun episodeFromElement(
+        element: Element,
+        seasonName: String,
+    ) = SEpisode.create().apply {
         val episodeId = element.attr("data-id")
         val epNum = element.selectFirst("div.episode-number")!!.text()
         val epName = element.selectFirst("h3.film-name a")!!.text()
@@ -182,38 +204,58 @@ abstract class DopeFlix(
     private val extractor by lazy { DopeFlixExtractor(client) }
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
-    override fun videoListParse(response: Response, hoster: Hoster): List<Video> {
+    override fun videoListParse(
+        response: Response,
+        hoster: Hoster,
+    ): List<Video> {
         val doc = response.asJsoup()
         val episodeReferer = Headers.headersOf("Referer", response.request.header("referer")!!)
-        return doc.select("ul.fss-list a.btn-play")
+        return doc
+            .select("ul.fss-list a.btn-play")
             .parallelCatchingFlatMapBlocking { server ->
                 val name = server.selectFirst("span")!!.text()
                 val id = server.attr("data-id")
                 val url = "$baseUrl/ajax/sources/$id"
-                val reqBody = client.newCall(GET(url, episodeReferer)).execute()
-                    .body.string()
-                val sourceUrl = reqBody.substringAfter("\"link\":\"")
-                    .substringBefore("\"")
+                val reqBody =
+                    client
+                        .newCall(GET(url, episodeReferer))
+                        .execute()
+                        .body
+                        .string()
+                val sourceUrl =
+                    reqBody
+                        .substringAfter("\"link\":\"")
+                        .substringBefore("\"")
                 when {
-                    "DoodStream" in name ->
-                        DoodExtractor(client).videoFromUrl(sourceUrl)
+                    "DoodStream" in name -> {
+                        DoodExtractor(client)
+                            .videoFromUrl(sourceUrl)
                             ?.let(::listOf)
+                    }
+
                     "Vidcloud" in name || "UpCloud" in name -> {
                         val video = extractor.getVideoDto(sourceUrl)
                         getVideosFromServer(video, name)
                     }
-                    else -> null
+
+                    else -> {
+                        null
+                    }
                 }.orEmpty()
             }
     }
 
-    private fun getVideosFromServer(video: VideoDto, name: String): List<Video> {
+    private fun getVideosFromServer(
+        video: VideoDto,
+        name: String,
+    ): List<Video> {
         val masterUrl = video.sources.first().file
-        val subs = video.tracks
-            ?.filter { it.kind == "captions" }
-            ?.mapNotNull { Track(it.file, it.label) }
-            ?.let(::subLangOrder)
-            ?: emptyList<Track>()
+        val subs =
+            video.tracks
+                ?.filter { it.kind == "captions" }
+                ?.mapNotNull { Track(it.file, it.label) }
+                ?.let(::subLangOrder)
+                ?: emptyList<Track>()
         if (masterUrl.contains("playlist.m3u8")) {
             return playlistUtils.extractFromHls(
                 masterUrl,
@@ -234,103 +276,118 @@ abstract class DopeFlix(
             compareBy(
                 { it.videoTitle.contains(quality) }, // preferred quality first
                 // then group by quality
-                { Regex("""(\d+)p""").find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0 },
+                {
+                    Regex("""(\d+)p""")
+                        .find(it.videoTitle)
+                        ?.groupValues
+                        ?.get(1)
+                        ?.toIntOrNull() ?: 0
+                },
             ),
         ).reversed()
     }
 
     private fun subLangOrder(tracks: List<Track>): List<Track> {
         val language = preferences.getString(PREF_SUB_KEY, PREF_SUB_DEFAULT)!!
-        return tracks.sortedWith(
-            compareBy { it.lang.contains(language) },
-        ).reversed()
+        return tracks
+            .sortedWith(
+                compareBy { it.lang.contains(language) },
+            ).reversed()
     }
 
     // ============================== Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_DOMAIN_KEY
-            title = PREF_DOMAIN_TITLE
-            entries = domainArray
-            entryValues = domainArray
-            setDefaultValue(defaultDomain)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_DOMAIN_KEY
+                title = PREF_DOMAIN_TITLE
+                entries = domainArray
+                entryValues = domainArray
+                setDefaultValue(defaultDomain)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_QUALITY_KEY
-            title = PREF_QUALITY_TITLE
-            entries = PREF_QUALITY_LIST
-            entryValues = PREF_QUALITY_LIST
-            setDefaultValue(PREF_QUALITY_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_QUALITY_KEY
+                title = PREF_QUALITY_TITLE
+                entries = PREF_QUALITY_LIST
+                entryValues = PREF_QUALITY_LIST
+                setDefaultValue(PREF_QUALITY_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_SUB_KEY
-            title = PREF_SUB_TITLE
-            entries = PREF_SUB_LANGUAGES
-            entryValues = PREF_SUB_LANGUAGES
-            setDefaultValue(PREF_SUB_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_SUB_KEY
+                title = PREF_SUB_TITLE
+                entries = PREF_SUB_LANGUAGES
+                entryValues = PREF_SUB_LANGUAGES
+                setDefaultValue(PREF_SUB_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_LATEST_KEY
-            title = PREF_LATEST_TITLE
-            entries = PREF_LATEST_PAGES
-            entryValues = PREF_LATEST_PAGES
-            setDefaultValue(PREF_LATEST_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_LATEST_KEY
+                title = PREF_LATEST_TITLE
+                entries = PREF_LATEST_PAGES
+                entryValues = PREF_LATEST_PAGES
+                setDefaultValue(PREF_LATEST_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_POPULAR_KEY
-            title = PREF_POPULAR_TITLE
-            entries = PREF_POPULAR_ENTRIES
-            entryValues = PREF_POPULAR_VALUES
-            setDefaultValue(PREF_POPULAR_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_POPULAR_KEY
+                title = PREF_POPULAR_TITLE
+                entries = PREF_POPULAR_ENTRIES
+                entryValues = PREF_POPULAR_VALUES
+                setDefaultValue(PREF_POPULAR_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(key, entry).commit()
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(key, entry).commit()
+                }
+            }.also(screen::addPreference)
     }
 
     // ============================= Utilities ==============================
-    private fun HttpUrl.Builder.addIfNotBlank(query: String, value: String): HttpUrl.Builder {
+    private fun HttpUrl.Builder.addIfNotBlank(
+        query: String,
+        value: String,
+    ): HttpUrl.Builder {
         if (value.isNotBlank()) {
             addQueryParameter(query, value)
         }
@@ -349,11 +406,20 @@ abstract class DopeFlix(
         private const val PREF_SUB_KEY = "preferred_subLang"
         private const val PREF_SUB_TITLE = "Preferred sub language"
         private const val PREF_SUB_DEFAULT = "English"
-        private val PREF_SUB_LANGUAGES = arrayOf(
-            "Arabic", "English", "French", "German", "Hungarian",
-            "Italian", "Japanese", "Portuguese", "Romanian", "Russian",
-            "Spanish",
-        )
+        private val PREF_SUB_LANGUAGES =
+            arrayOf(
+                "Arabic",
+                "English",
+                "French",
+                "German",
+                "Hungarian",
+                "Italian",
+                "Japanese",
+                "Portuguese",
+                "Romanian",
+                "Russian",
+                "Spanish",
+            )
 
         private const val PREF_LATEST_KEY = "preferred_latest_page"
         private const val PREF_LATEST_TITLE = "Preferred latest page"

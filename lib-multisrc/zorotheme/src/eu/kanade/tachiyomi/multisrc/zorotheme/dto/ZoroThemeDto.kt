@@ -9,9 +9,7 @@ import org.jsoup.nodes.Document
 data class HtmlResponse(
     val html: String,
 ) {
-    fun getHtml(): Document {
-        return Jsoup.parseBodyFragment(html)
-    }
+    fun getHtml(): Document = Jsoup.parseBodyFragment(html)
 }
 
 @Serializable
@@ -33,7 +31,13 @@ data class SourceResponseDto(
 )
 
 @Serializable
-data class VideoLink(val file: String = "")
+data class VideoLink(
+    val file: String = "",
+)
 
 @Serializable
-data class TrackDto(val file: String, val kind: String, val label: String = "")
+data class TrackDto(
+    val file: String,
+    val kind: String,
+    val label: String = "",
+)
