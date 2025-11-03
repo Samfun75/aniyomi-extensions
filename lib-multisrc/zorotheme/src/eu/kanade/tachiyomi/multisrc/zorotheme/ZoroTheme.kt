@@ -9,6 +9,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
@@ -197,9 +198,9 @@ abstract class ZoroTheme(
 
     // ============================ Video Links =============================
 
-    override fun videoListRequest(episode: SEpisode): Request {
-        val id = episode.url.substringAfterLast("?ep=")
-        return GET("$baseUrl/ajax$ajaxRoute/episode/servers?episodeId=$id", apiHeaders(baseUrl + episode.url))
+    override fun videoListRequest(hoster: Hoster): Request {
+        val id = hoster.hosterUrl.substringAfterLast("?ep=")
+        return GET("$baseUrl/ajax$ajaxRoute/episode/servers?episodeId=$id", apiHeaders(baseUrl + hoster.hosterUrl))
     }
 
     data class VideoData(
@@ -208,8 +209,8 @@ abstract class ZoroTheme(
         val name: String,
     )
 
-    override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        val response = client.newCall(videoListRequest(episode)).await()
+    override suspend fun getVideoList(hoster: Hoster): List<Video> {
+        val response = client.newCall(videoListRequest(hoster)).await()
 
         val episodeReferer = response.request.header("referer")!!
         val typeSelection = preferences.typeToggle
@@ -240,11 +241,6 @@ abstract class ZoroTheme(
 
     abstract fun extractVideo(server: VideoData): List<Video>
 
-    override fun videoListSelector() = throw UnsupportedOperationException()
-
-    override fun videoFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
@@ -280,15 +276,15 @@ abstract class ZoroTheme(
         return this
     }
 
-    override fun List<Video>.sort(): List<Video> {
+    fun List<Video>.sort(): List<Video> {
         val quality = preferences.prefQuality
         val lang = preferences.prefLang
         val server = preferences.prefServer
 
         return this.sortedWith(
-            compareByDescending<Video> { it.quality.contains(quality) }
-                .thenByDescending { it.quality.contains(server, true) }
-                .thenByDescending { it.quality.contains(lang, true) },
+            compareByDescending<Video> { it.videoTitle.contains(quality) }
+                .thenByDescending { it.videoTitle.contains(server, true) }
+                .thenByDescending { it.videoTitle.contains(lang, true) },
         )
     }
 

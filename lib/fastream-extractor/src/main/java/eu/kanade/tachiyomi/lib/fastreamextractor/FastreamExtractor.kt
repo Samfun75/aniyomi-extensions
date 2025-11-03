@@ -9,9 +9,8 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import okhttp3.internal.commonEmptyHeaders
 
-class FastreamExtractor(private val client: OkHttpClient, private val headers: Headers = commonEmptyHeaders) {
+class FastreamExtractor(private val client: OkHttpClient, private val headers: Headers = Headers.EMPTY) {
     private val videoHeaders by lazy {
         headers.newBuilder()
             .set("Referer", "$FASTREAM_URL/")
@@ -52,7 +51,7 @@ class FastreamExtractor(private val client: OkHttpClient, private val headers: H
                 videoUrl.contains(".m3u8") -> {
                     playlistUtils.extractFromHls(videoUrl, videoNameGen = { "$prefix$it" })
                 }
-                else -> listOf(Video(videoUrl, prefix, videoUrl, videoHeaders))
+                else -> listOf(Video(videoUrl, prefix, headers = videoHeaders))
             }
         }.getOrElse { emptyList() }
     }

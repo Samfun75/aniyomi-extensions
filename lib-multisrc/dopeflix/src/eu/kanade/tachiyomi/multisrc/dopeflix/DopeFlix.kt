@@ -6,6 +6,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
@@ -181,7 +182,7 @@ abstract class DopeFlix(
     private val extractor by lazy { DopeFlixExtractor(client) }
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
-    override fun videoListParse(response: Response): List<Video> {
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> {
         val doc = response.asJsoup()
         val episodeReferer = Headers.headersOf("Referer", response.request.header("referer")!!)
         return doc.select("ul.fss-list a.btn-play")
@@ -222,18 +223,18 @@ abstract class DopeFlix(
         }
 
         return listOf(
-            Video(masterUrl, "$name - Default", masterUrl, subtitleTracks = subs),
+            Video(masterUrl, "$name - Default", subtitleTracks = subs),
         )
     }
 
-    override fun List<Video>.sort(): List<Video> {
+    fun List<Video>.sort(): List<Video> {
         val quality = preferences.getString(PREF_QUALITY_KEY, PREF_QUALITY_DEFAULT)!!
 
         return sortedWith(
             compareBy(
-                { it.quality.contains(quality) }, // preferred quality first
+                { it.videoTitle.contains(quality) }, // preferred quality first
                 // then group by quality
-                { Regex("""(\d+)p""").find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0 },
+                { Regex("""(\d+)p""").find(it.videoTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 0 },
             ),
         ).reversed()
     }
@@ -244,12 +245,6 @@ abstract class DopeFlix(
             compareBy { it.lang.contains(language) },
         ).reversed()
     }
-
-    override fun videoListSelector() = throw UnsupportedOperationException()
-
-    override fun videoFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun videoUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // ============================== Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
