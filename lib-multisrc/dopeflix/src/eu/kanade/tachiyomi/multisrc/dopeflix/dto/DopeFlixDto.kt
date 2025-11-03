@@ -17,7 +17,13 @@ data class SourceResponseDto(
 )
 
 @Serializable
-data class VideoLink(val file: String = "")
+data class VideoLink(
+    val file: String = "",
+)
 
 @Serializable
-data class TrackDto(val file: String, val kind: String, val label: String = "")
+data class TrackDto(
+    val file: String,
+    val kind: String,
+    val label: String = "",
+)

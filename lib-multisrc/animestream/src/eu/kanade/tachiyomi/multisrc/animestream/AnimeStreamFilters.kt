@@ -9,44 +9,64 @@ object AnimeStreamFilters {
         displayName: String,
         val vals: Array<Pair<String, String>>,
     ) : AnimeFilter.Select<String>(
-        displayName,
-        vals.map { it.first }.toTypedArray(),
-    ) {
+            displayName,
+            vals.map { it.first }.toTypedArray(),
+        ) {
         fun toQueryPart() = vals[state].second
     }
 
-    open class CheckBoxFilterList(name: String, val pairs: Array<Pair<String, String>>) :
-        AnimeFilter.Group<AnimeFilter.CheckBox>(name, pairs.map { CheckBoxVal(it.first, false) })
+    open class CheckBoxFilterList(
+        name: String,
+        val pairs: Array<Pair<String, String>>,
+    ) : AnimeFilter.Group<AnimeFilter.CheckBox>(name, pairs.map { CheckBoxVal(it.first, false) })
 
-    private class CheckBoxVal(name: String, state: Boolean = false) : AnimeFilter.CheckBox(name, state)
+    private class CheckBoxVal(
+        name: String,
+        state: Boolean = false,
+    ) : AnimeFilter.CheckBox(name, state)
 
-    inline fun <reified R> AnimeFilterList.asQueryPart(): String {
-        return (getFirst<R>() as QueryPartFilter).toQueryPart()
-    }
+    inline fun <reified R> AnimeFilterList.asQueryPart(): String = (getFirst<R>() as QueryPartFilter).toQueryPart()
 
-    inline fun <reified R> AnimeFilterList.getFirst(): R {
-        return first { it is R } as R
-    }
+    inline fun <reified R> AnimeFilterList.getFirst(): R = first { it is R } as R
 
     inline fun <reified R> AnimeFilterList.parseCheckbox(
         options: Array<Pair<String, String>>,
         name: String,
-    ): String {
-        return (getFirst<R>() as CheckBoxFilterList).state
+    ): String =
+        (getFirst<R>() as CheckBoxFilterList)
+            .state
             .filter { it.state }
             .map { checkbox -> options.find { it.first == checkbox.name }!!.second }
             .filter(String::isNotBlank)
             .joinToString("&") { "$name[]=$it" }
-    }
 
-    internal class GenresFilter(name: String) : CheckBoxFilterList(name, GENRES_LIST)
-    internal class SeasonFilter(name: String) : CheckBoxFilterList(name, SEASON_LIST)
-    internal class StudioFilter(name: String) : CheckBoxFilterList(name, STUDIO_LIST)
+    internal class GenresFilter(
+        name: String,
+    ) : CheckBoxFilterList(name, GENRES_LIST)
 
-    internal class StatusFilter(name: String) : QueryPartFilter(name, STATUS_LIST)
-    internal class TypeFilter(name: String) : QueryPartFilter(name, TYPE_LIST)
-    internal class SubFilter(name: String) : QueryPartFilter(name, SUB_LIST)
-    internal class OrderFilter(name: String) : QueryPartFilter(name, ORDER_LIST)
+    internal class SeasonFilter(
+        name: String,
+    ) : CheckBoxFilterList(name, SEASON_LIST)
+
+    internal class StudioFilter(
+        name: String,
+    ) : CheckBoxFilterList(name, STUDIO_LIST)
+
+    internal class StatusFilter(
+        name: String,
+    ) : QueryPartFilter(name, STATUS_LIST)
+
+    internal class TypeFilter(
+        name: String,
+    ) : QueryPartFilter(name, TYPE_LIST)
+
+    internal class SubFilter(
+        name: String,
+    ) : QueryPartFilter(name, SUB_LIST)
+
+    internal class OrderFilter(
+        name: String,
+    ) : QueryPartFilter(name, ORDER_LIST)
 
     internal data class FilterSearchParams(
         val genres: String = "",
@@ -76,13 +96,15 @@ object AnimeStreamFilters {
 
     fun filterInitialized() = ::filterElements.isInitialized
 
-    fun getPairListByIndex(index: Int) = filterElements.get(index)
-        .select("li")
-        .map { element ->
-            val key = element.selectFirst("label")!!.text()
-            val value = element.selectFirst("input")!!.attr("value")
-            Pair(key, value)
-        }.toTypedArray()
+    fun getPairListByIndex(index: Int) =
+        filterElements
+            .get(index)
+            .select("li")
+            .map { element ->
+                val key = element.selectFirst("label")!!.text()
+                val value = element.selectFirst("input")!!.attr("value")
+                Pair(key, value)
+            }.toTypedArray()
 
     private val GENRES_LIST by lazy { getPairListByIndex(0) }
     private val SEASON_LIST by lazy { getPairListByIndex(1) }

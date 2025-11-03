@@ -8,7 +8,6 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class AnimeStreamUrlActivity : Activity() {
-
     private val tag by lazy { javaClass.simpleName }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,11 +15,12 @@ class AnimeStreamUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.isNotEmpty()) {
             val path = pathSegments.joinToString("/")
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.ANIMESEARCH"
-                putExtra("query", "${AnimeStream.PREFIX_SEARCH}$path")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.ANIMESEARCH"
+                    putExtra("query", "${AnimeStream.PREFIX_SEARCH}$path")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

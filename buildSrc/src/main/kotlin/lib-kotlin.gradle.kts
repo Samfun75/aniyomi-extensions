@@ -3,6 +3,10 @@ plugins {
     kotlin("jvm")
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
 versionCatalogs
     .named("libs")
     .findLibrary("kotlin-stdlib")
