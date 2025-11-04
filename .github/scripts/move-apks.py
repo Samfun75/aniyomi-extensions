@@ -12,5 +12,5 @@ REPO_APK_DIR.mkdir(parents=True, exist_ok=True)
 
 for apk in (Path.home() / "apk-artifacts").glob("**/*.apk"):
     apk_name = apk.name.replace("-release.apk", ".apk")
-
+    print(f"Moving {apk} to {REPO_APK_DIR / apk_name}")
     shutil.move(apk, REPO_APK_DIR / apk_name)

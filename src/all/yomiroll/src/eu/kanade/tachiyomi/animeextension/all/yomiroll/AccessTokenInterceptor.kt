@@ -17,6 +17,7 @@ import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.PasswordAuthentication
 import java.net.Proxy
+import java.net.URLEncoder
 import java.text.MessageFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -154,8 +155,8 @@ class AccessTokenInterceptor(
     }
 
     private fun getRequest(): Request {
-        val userName = preferences.username
-        val password = preferences.password
+        val userName = URLEncoder.encode(preferences.username)
+        val password = URLEncoder.encode(preferences.password)
         val userAgent = preferences.userAgent
         val basicAuth = preferences.basicAuth
         val deviceId = preferences.deviceId
