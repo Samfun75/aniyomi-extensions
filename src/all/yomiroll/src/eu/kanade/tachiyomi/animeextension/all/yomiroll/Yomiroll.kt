@@ -227,7 +227,8 @@ class Yomiroll :
         return info.data.first().toSAnimeOrNull(anime) ?: anime
     }
 
-    override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
+    override fun animeDetailsParse(response: Response): SAnime =
+        throw UnsupportedOperationException()
 
     // ============================== Episodes ==============================
 
@@ -278,7 +279,13 @@ class Yomiroll :
             SEpisode.create().apply {
                 url =
                     EpisodeData(
-                        ep.versions?.map { Triple(it.mediaId, it.audioLocale, it.isPremiumOnly.toString()) }
+                        ep.versions?.map {
+                            Triple(
+                                it.mediaId,
+                                it.audioLocale,
+                                it.isPremiumOnly.toString(),
+                            )
+                        }
                             ?: listOf(
                                 Triple(
                                     ep.streamsLink
@@ -310,7 +317,8 @@ class Yomiroll :
         }
     }
 
-    override fun seasonListParse(response: Response): List<SAnime> = throw UnsupportedOperationException()
+    override fun seasonListParse(response: Response): List<SAnime> =
+        throw UnsupportedOperationException()
 
     // ============================ Video Links =============================
 
@@ -343,7 +351,8 @@ class Yomiroll :
         return extractVideo(urlJson.id).sort()
     }
 
-    override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
+    override fun hosterListParse(response: Response): List<Hoster> =
+        throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
@@ -418,41 +427,46 @@ class Yomiroll :
                 ?: emptyList()
 
         val skipTimes =
-            client
-                .newCall(GET("https://static.crunchyroll.com/skip-events/production/$mediaId.json".toHttpUrlOrNull()!!))
-                .execute()
-                .parseAs<MediaSegmentsResponse>()
-                .let { resp ->
-                    listOf(
-                        resp.intro,
-                        resp.credits,
-                        resp.recap,
-                        resp.preview,
-                    ).mapNotNull { timestamp ->
-                        // CR sometimes send empty object for timestamp
-                        if (
-                            timestamp == null ||
-                            timestamp.start == null ||
-                            timestamp.end == null ||
-                            timestamp.type == null
-                        ) {
-                            return@mapNotNull null
-                        }
+            runCatching {
+                client
+                    .newCall(GET("https://static.crunchyroll.com/skip-events/production/$mediaId.json".toHttpUrlOrNull()!!))
+                    .execute()
+                    .parseAs<MediaSegmentsResponse>()
+                    .let { resp ->
+                        listOf(
+                            resp.intro,
+                            resp.credits,
+                            resp.recap,
+                            resp.preview,
+                        ).mapNotNull { timestamp ->
+                            // CR sometimes send empty object for timestamp
+                            if (
+                                timestamp == null ||
+                                timestamp.start == null ||
+                                timestamp.end == null ||
+                                timestamp.type == null
+                            ) {
+                                return@mapNotNull null
+                            }
 
-                        TimeStamp(
-                            start = timestamp.start,
-                            end = timestamp.end,
-                            name = timestamp.type.replaceFirstChar { it.uppercaseChar() },
-                            type =
-                                when (timestamp.type) {
-                                    "intro" -> ChapterType.Opening
-                                    "credits" -> ChapterType.Ending
-                                    "recap" -> ChapterType.Recap
-                                    else -> ChapterType.Other
-                                },
-                        )
+                            TimeStamp(
+                                start = timestamp.start,
+                                end = timestamp.end,
+                                name = timestamp.type.replaceFirstChar { it.uppercaseChar() },
+                                type =
+                                    when (timestamp.type) {
+                                        "intro" -> ChapterType.Opening
+                                        "credits" -> ChapterType.Ending
+                                        "recap" -> ChapterType.Recap
+                                        else -> ChapterType.Other
+                                    },
+                            )
+                        }
                     }
-                }
+            }.getOrElse { err ->
+                Log.e("Yomiroll", "Failed to fetch skip times: ${err.localizedMessage}", err)
+                emptyList()
+            }
 
         mainScope.launch {
             async {
@@ -479,12 +493,14 @@ class Yomiroll :
             }
         }
 
-        return doc.select("representation[mimeType*=video]").map { element ->
+        val videoSelector = "representation[mimeType*=video],representation[id*=video]"
+
+        return doc.select(videoSelector).map { element ->
             val quality = element.attr("height")
             val docCopy = doc.clone()
 
             docCopy
-                .select("representation[mimeType*=video]")
+                .select(videoSelector)
                 .filter { it.attr("height") != quality }
                 .forEach { it.remove() }
 
@@ -565,9 +581,11 @@ class Yomiroll :
             }
     }
 
-    private fun getVideoRequest(mediaId: String): Request = GET("$baseUrl/playback/v3/$mediaId/tv/android_tv/play?queue=0")
+    private fun getVideoRequest(mediaId: String): Request =
+        GET("$baseUrl/playback/v3/$mediaId/tv/android_tv/play?queue=0")
 
-    private fun Anime.toSAnimeOrNull(anime: SAnime? = null) = runCatching { toSAnime(anime) }.getOrNull()
+    private fun Anime.toSAnimeOrNull(anime: SAnime? = null) =
+        runCatching { toSAnime(anime) }.getOrNull()
 
     private fun Anime.toSAnime(anime: SAnime? = null): SAnime =
         SAnime.create().apply {
@@ -584,8 +602,8 @@ class Yomiroll :
             fetch_type = FetchType.Episodes
             genre = anime?.genre ?: (
                 series_metadata?.genres ?: movie_metadata?.genres
-                    ?: genres
-            )?.joinToString { gen -> gen.replaceFirstChar { it.uppercase() } }
+                ?: genres
+                )?.joinToString { gen -> gen.replaceFirstChar { it.uppercase() } }
             status = anime?.let {
                 val media = JSON.decodeFromString<LinkData>(anime.url)
                 if (media.media_type == "series") {
@@ -606,12 +624,12 @@ class Yomiroll :
                                 subtitle_locales ?: (
                                     series_metadata
                                         ?: movie_metadata
-                                )?.subtitle_locales
-                            )?.any() == true ||
+                                    )?.subtitle_locales
+                                )?.any() == true ||
                             (
                                 series_metadata
                                     ?: movie_metadata
-                            )?.is_subbed == true ||
+                                )?.is_subbed == true ||
                             is_subbed == true
                         ) {
                             append(" Sub")
@@ -619,11 +637,11 @@ class Yomiroll :
                         if ((
                                 (series_metadata?.audio_locales ?: audio_locales)?.size
                                     ?: 0
-                            ) > 1 ||
+                                ) > 1 ||
                             (
                                 series_metadata
                                     ?: movie_metadata
-                            )?.is_dubbed == true ||
+                                )?.is_dubbed == true ||
                             is_dubbed == true
                         ) {
                             append(" Dub")
@@ -635,7 +653,7 @@ class Yomiroll :
                             (
                                 (series_metadata ?: movie_metadata)?.maturity_ratings
                                     ?: maturity_ratings
-                            )?.joinToString() ?: "-",
+                                )?.joinToString() ?: "-",
                         )
                         if (series_metadata?.is_simulcast == true) appendLine("Simulcast")
                         appendLine()
@@ -646,7 +664,7 @@ class Yomiroll :
                                 series_metadata?.audio_locales ?: audio_locales ?: listOf(
                                     audio_locale ?: "-",
                                 )
-                            ).sortedBy { it.getLocale() }.joinToString { it.getLocale() },
+                                ).sortedBy { it.getLocale() }.joinToString { it.getLocale() },
                         )
                         appendLine()
 
@@ -654,8 +672,8 @@ class Yomiroll :
                         append(
                             (
                                 subtitle_locales ?: series_metadata?.subtitle_locales
-                                    ?: movie_metadata?.subtitle_locales
-                            )?.sortedBy { it.getLocale() }
+                                ?: movie_metadata?.subtitle_locales
+                                )?.sortedBy { it.getLocale() }
                                 ?.joinToString { it.getLocale() },
                         )
                     }.toString()
