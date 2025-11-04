@@ -227,8 +227,7 @@ class Yomiroll :
         return info.data.first().toSAnimeOrNull(anime) ?: anime
     }
 
-    override fun animeDetailsParse(response: Response): SAnime =
-        throw UnsupportedOperationException()
+    override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
 
     // ============================== Episodes ==============================
 
@@ -317,8 +316,7 @@ class Yomiroll :
         }
     }
 
-    override fun seasonListParse(response: Response): List<SAnime> =
-        throw UnsupportedOperationException()
+    override fun seasonListParse(response: Response): List<SAnime> = throw UnsupportedOperationException()
 
     // ============================ Video Links =============================
 
@@ -351,8 +349,7 @@ class Yomiroll :
         return extractVideo(urlJson.id).sort()
     }
 
-    override fun hosterListParse(response: Response): List<Hoster> =
-        throw UnsupportedOperationException()
+    override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
@@ -581,23 +578,27 @@ class Yomiroll :
             }
     }
 
-    private fun getVideoRequest(mediaId: String): Request =
-        GET("$baseUrl/playback/v3/$mediaId/tv/android_tv/play?queue=0")
+    private fun getVideoRequest(mediaId: String): Request = GET("$baseUrl/playback/v3/$mediaId/tv/android_tv/play?queue=0")
 
-    private fun Anime.toSAnimeOrNull(anime: SAnime? = null) =
-        runCatching { toSAnime(anime) }.getOrNull()
+    private fun Anime.toSAnimeOrNull(anime: SAnime? = null) = runCatching { toSAnime(anime) }.getOrNull()
 
     private fun Anime.toSAnime(anime: SAnime? = null): SAnime =
         SAnime.create().apply {
             title = this@toSAnime.title
-            thumbnail_url = images.poster_tall?.getOrNull(0)?.thirdLast()?.source
-                ?: images.poster_tall?.getOrNull(0)?.last()?.source
+            thumbnail_url = images.poster_tall
+                ?.getOrNull(0)
+                ?.thirdLast()
+                ?.source
+                ?: images.poster_tall
+                    ?.getOrNull(0)
+                    ?.last()
+                    ?.source
             url = anime?.url ?: LinkData(id, type!!).toJsonString()
             fetch_type = FetchType.Episodes
             genre = anime?.genre ?: (
                 series_metadata?.genres ?: movie_metadata?.genres
-                ?: genres
-                )?.joinToString { gen -> gen.replaceFirstChar { it.uppercase() } }
+                    ?: genres
+            )?.joinToString { gen -> gen.replaceFirstChar { it.uppercase() } }
             status = anime?.let {
                 val media = JSON.decodeFromString<LinkData>(anime.url)
                 if (media.media_type == "series") {
@@ -614,8 +615,12 @@ class Yomiroll :
                         appendLine()
 
                         append("Language:")
-                        if ((subtitle_locales ?: (series_metadata
-                                ?: movie_metadata)?.subtitle_locales)?.any() == true ||
+                        if ((
+                                subtitle_locales ?: (
+                                    series_metadata
+                                        ?: movie_metadata
+                                )?.subtitle_locales
+                            )?.any() == true ||
                             (series_metadata ?: movie_metadata)?.is_subbed == true ||
                             is_subbed == true
                         ) {
@@ -634,7 +639,7 @@ class Yomiroll :
                             (
                                 (series_metadata ?: movie_metadata)?.maturity_ratings
                                     ?: maturity_ratings
-                                )?.joinToString() ?: "-",
+                            )?.joinToString() ?: "-",
                         )
                         if (series_metadata?.is_simulcast == true) appendLine("Simulcast")
                         appendLine()
@@ -645,7 +650,7 @@ class Yomiroll :
                                 series_metadata?.audio_locales ?: audio_locales ?: listOf(
                                     audio_locale ?: "-",
                                 )
-                                ).sortedBy { it.getLocale() }
+                            ).sortedBy { it.getLocale() }
                                 .joinToString { it.getLocale() },
                         )
                         appendLine()
@@ -654,8 +659,8 @@ class Yomiroll :
                         append(
                             (
                                 subtitle_locales ?: series_metadata?.subtitle_locales
-                                ?: movie_metadata?.subtitle_locales
-                                )?.sortedBy { it.getLocale() }
+                                    ?: movie_metadata?.subtitle_locales
+                            )?.sortedBy { it.getLocale() }
                                 ?.joinToString { it.getLocale() },
                         )
                     }.toString()
