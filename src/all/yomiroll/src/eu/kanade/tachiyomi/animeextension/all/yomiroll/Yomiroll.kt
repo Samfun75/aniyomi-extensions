@@ -590,14 +590,8 @@ class Yomiroll :
     private fun Anime.toSAnime(anime: SAnime? = null): SAnime =
         SAnime.create().apply {
             title = this@toSAnime.title
-            thumbnail_url = images.poster_tall
-                ?.getOrNull(0)
-                ?.thirdLast()
-                ?.source
-                ?: images.poster_tall
-                    ?.getOrNull(0)
-                    ?.last()
-                    ?.source
+            thumbnail_url = images.poster_tall?.getOrNull(0)?.thirdLast()?.source
+                ?: images.poster_tall?.getOrNull(0)?.last()?.source
             url = anime?.url ?: LinkData(id, type!!).toJsonString()
             fetch_type = FetchType.Episodes
             genre = anime?.genre ?: (
@@ -620,28 +614,15 @@ class Yomiroll :
                         appendLine()
 
                         append("Language:")
-                        if ((
-                                subtitle_locales ?: (
-                                    series_metadata
-                                        ?: movie_metadata
-                                    )?.subtitle_locales
-                                )?.any() == true ||
-                            (
-                                series_metadata
-                                    ?: movie_metadata
-                                )?.is_subbed == true ||
+                        if ((subtitle_locales ?: (series_metadata
+                                ?: movie_metadata)?.subtitle_locales)?.any() == true ||
+                            (series_metadata ?: movie_metadata)?.is_subbed == true ||
                             is_subbed == true
                         ) {
                             append(" Sub")
                         }
-                        if ((
-                                (series_metadata?.audio_locales ?: audio_locales)?.size
-                                    ?: 0
-                                ) > 1 ||
-                            (
-                                series_metadata
-                                    ?: movie_metadata
-                                )?.is_dubbed == true ||
+                        if (((series_metadata?.audio_locales ?: audio_locales)?.size ?: 0) > 1 ||
+                            (series_metadata ?: movie_metadata)?.is_dubbed == true ||
                             is_dubbed == true
                         ) {
                             append(" Dub")
@@ -664,7 +645,8 @@ class Yomiroll :
                                 series_metadata?.audio_locales ?: audio_locales ?: listOf(
                                     audio_locale ?: "-",
                                 )
-                                ).sortedBy { it.getLocale() }.joinToString { it.getLocale() },
+                                ).sortedBy { it.getLocale() }
+                                .joinToString { it.getLocale() },
                         )
                         appendLine()
 
