@@ -80,7 +80,7 @@ for apk in REPO_APK_DIR.iterdir():
             {
                 "name": name,
                 "lang": language,
-                "id": get_id(extName, version_id),
+                "id": get_id(name, version_id),
                 "baseUrl": "",
                 "versionId": version_id,
             }
