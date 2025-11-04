@@ -39,10 +39,15 @@ android {
             archivesName = "aniyomi-$applicationIdSuffix-v$versionName"
         }
         assert extClass.startsWith(".")
+        String[] names = project.ext.find("extNames") ?: []
+        assert names.length > 0
+
         manifestPlaceholders = [
                 appName : "Aniyomi: $extName",
                 extClass: extClass,
                 nsfw    : project.ext.find("isNsfw") ? 1 : 0,
+                versionId : project.ext.find("versionId") ?: 1,
+                names : names.join(";")
         ]
         String baseUrl = project.ext.find("baseUrl") ?: ""
         if (theme != null && !baseUrl.isEmpty()) {
