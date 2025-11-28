@@ -146,18 +146,19 @@ data class EpisodeResult(
         val versions: ArrayList<Version>? = null,
         @SerialName("streams_link")
         val streamsLink: String? = null,
-    ) {
-        @Serializable
-        data class Version(
-            @SerialName("audio_locale")
-            val audioLocale: String,
-            @SerialName("guid")
-            val mediaId: String,
-            @SerialName("is_premium_only")
-            val isPremiumOnly: Boolean,
-        )
-    }
+    )
 }
+
+@Serializable
+data class Version(
+    @SerialName("audio_locale")
+    val audioLocale: String,
+    @SerialName("guid")
+    val mediaId: String,
+    @SerialName("is_premium_only")
+    val isPremiumOnly: Boolean,
+    val original: Boolean,
+)
 
 @Serializable
 data class EpisodeData(
@@ -178,6 +179,7 @@ data class LicenseResponse(
 data class VideoStreams(
     val url: String,
     val token: String,
+    val versions: ArrayList<Version>,
     val subtitles: JsonObject? = null,
     val audioLocale: String? = null,
 )
