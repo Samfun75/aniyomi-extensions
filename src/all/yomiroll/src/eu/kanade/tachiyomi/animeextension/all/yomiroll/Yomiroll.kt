@@ -11,12 +11,14 @@ import eu.kanade.tachiyomi.animesource.model.ChapterType
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SAnimeEpisodeUpdate
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.TimeStamp
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.awaitSuccess
 import extensions.utils.Source
 import extensions.utils.addEditTextPreference
 import extensions.utils.addListPreference
@@ -31,7 +33,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import okhttp3.CookieJar
@@ -40,7 +42,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import org.samfun.ktvine.cdm.Cdm
@@ -93,72 +94,50 @@ class Yomiroll : Source() {
 
     // ============================== Popular ===============================
 
-    override fun popularAnimeRequest(page: Int): Request {
-        val start = if (page != 1) "start=${(page - 1) * 36}&" else ""
-        return GET("$crApiUrl/discover/browse?${start}n=36&sort_by=popularity&locale=en-US")
-    }
-
-    override fun popularAnimeParse(response: Response): AnimesPage {
-        val parsed = response.parseAs<AnimeResult>()
-        val animeList = parsed.data.mapNotNull { it.toSAnimeOrNull() }
-        val position =
-            response.request.url
-                .queryParameter("start")
-                ?.toIntOrNull() ?: 0
-        return AnimesPage(animeList, position + 36 < parsed.total)
-    }
+    override suspend fun getPopularAnime(page: Int): AnimesPage = browseAnime(page, "&sort_by=popularity&locale=en-US")
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val start = if (page != 1) "start=${(page - 1) * 36}&" else ""
-        return GET("$crApiUrl/discover/browse?${start}n=36&sort_by=newly_added&locale=en-US")
-    }
-
-    override fun latestUpdatesParse(response: Response): AnimesPage = popularAnimeParse(response)
+    override suspend fun getLatestUpdates(page: Int): AnimesPage = browseAnime(page, "&sort_by=newly_added&locale=en-US")
 
     // =============================== Search ===============================
 
-    override fun searchAnimeRequest(
+    override suspend fun getSearchAnime(
         page: Int,
         query: String,
         filters: AnimeFilterList,
-    ): Request {
+    ): AnimesPage {
         val params = YomirollFilters.getSearchParameters(filters)
-        val start = if (page != 1) "start=${(page - 1) * 36}&" else ""
-        val url =
-            if (query.isNotBlank()) {
-                val cleanQuery = query.replace(" ", "+").lowercase()
-                "$crApiUrl/discover/search?${start}n=36&q=$cleanQuery&type=${params.type}"
-            } else {
-                "$crApiUrl/discover/browse?${start}n=36${params.media}${params.language}&sort_by=${params.sort}${params.category}"
-            }
-        return GET(url)
+        if (query.isBlank()) {
+            return browseAnime(page, "${params.media}${params.language}&sort_by=${params.sort}${params.category}")
+        }
+
+        val cleanQuery = query.replace(" ", "+").lowercase()
+        val url = "$crApiUrl/discover/search?${startParam(page)}n=$PAGE_SIZE&q=$cleanQuery&type=${params.type}"
+        val parsed = client
+            .newCall(GET(url))
+            .awaitSuccess()
+            .parseAs<SearchAnimeResult>()
+            .data
+            .first()
+        return AnimesPage(
+            parsed.items.mapNotNull { it.toSAnimeOrNull() },
+            offsetOf(page) + PAGE_SIZE < parsed.count,
+        )
     }
 
-    override fun searchAnimeParse(response: Response): AnimesPage {
-        val bod = response.body.string()
-        val total: Int
-        val items =
-            if (response.request.url.encodedPath
-                    .contains("search")
-            ) {
-                val parsed = bod.parseAs<SearchAnimeResult>().data.first()
-                total = parsed.count
-                parsed.items
-            } else {
-                val parsed = bod.parseAs<AnimeResult>()
-                total = parsed.total
-                parsed.data
-            }
-
-        val animeList = items.mapNotNull { it.toSAnimeOrNull() }
-        val position =
-            response.request.url
-                .queryParameter("start")
-                ?.toIntOrNull() ?: 0
-        return AnimesPage(animeList, position + 36 < total)
+    private suspend fun browseAnime(page: Int, query: String): AnimesPage {
+        val url = "$crApiUrl/discover/browse?${startParam(page)}n=$PAGE_SIZE$query"
+        val parsed = client.newCall(GET(url)).awaitSuccess().parseAs<AnimeResult>()
+        return AnimesPage(
+            parsed.data.mapNotNull { it.toSAnimeOrNull() },
+            offsetOf(page) + PAGE_SIZE < parsed.total,
+        )
     }
+
+    private fun offsetOf(page: Int) = (page - 1) * PAGE_SIZE
+
+    private fun startParam(page: Int) = if (page == 1) "" else "start=${offsetOf(page)}&"
 
     override fun getFilterList(): AnimeFilterList = YomirollFilters.FILTER_LIST
 
@@ -210,59 +189,57 @@ class Yomiroll : Source() {
         }
     }
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime {
+    override suspend fun getAnimeEpisodeUpdate(
+        anime: SAnime,
+        episodes: List<SEpisode>,
+        fetchDetails: Boolean,
+        fetchEpisodes: Boolean,
+    ): SAnimeEpisodeUpdate = supervisorScope {
+        val details = if (fetchDetails) async { loadAnimeDetails(anime) } else null
+        val episodeList = if (fetchEpisodes) async { loadEpisodeList(anime) } else null
+        SAnimeEpisodeUpdate(details?.await() ?: anime, episodeList?.await() ?: episodes)
+    }
+
+    private suspend fun loadAnimeDetails(anime: SAnime): SAnime {
         val mediaId = anime.url.parseAs<LinkData>()
-        val resp =
-            client
-                .newCall(
-                    if (mediaId.media_type == "series") {
-                        GET("$crApiUrl/cms/series/${mediaId.id}?locale=en-US")
-                    } else {
-                        GET("$crApiUrl/cms/movie_listings/${mediaId.id}?locale=en-US")
-                    },
-                ).execute()
-                .body
-                .string()
-        val info = resp.parseAs<AnimeResult>()
+        val url = if (mediaId.media_type == "series") {
+            "$crApiUrl/cms/series/${mediaId.id}?locale=en-US"
+        } else {
+            "$crApiUrl/cms/movie_listings/${mediaId.id}?locale=en-US"
+        }
+        val info = client.newCall(GET(url)).awaitSuccess().parseAs<AnimeResult>()
         return info.data.first().toSAnimeOrNull(anime) ?: anime
     }
 
-    override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException()
-
     // ============================== Episodes ==============================
 
-    override fun episodeListRequest(anime: SAnime): Request {
+    private suspend fun loadEpisodeList(anime: SAnime): List<SEpisode> {
         val mediaId = anime.url.parseAs<LinkData>()
-        return if (mediaId.media_type == "series") {
-            GET("$crApiUrl/cms/series/${mediaId.id}/seasons")
+        val isSeries = mediaId.media_type == "series"
+        val url = if (isSeries) {
+            "$crApiUrl/cms/series/${mediaId.id}/seasons"
         } else {
-            GET("$crApiUrl/cms/movie_listings/${mediaId.id}/movies")
+            "$crApiUrl/cms/movie_listings/${mediaId.id}/movies"
         }
-    }
+        val seasons = client.newCall(GET(url)).awaitSuccess().parseAs<SeasonResult>()
 
-    override fun episodeListParse(response: Response): List<SEpisode> {
-        val seasons = response.parseAs<SeasonResult>()
-        val series =
-            response.request.url.encodedPath
-                .contains("series/")
-        val chunkSize = Runtime.getRuntime().availableProcessors()
-        return if (series) {
-            seasons.data
-                .sortedBy { it.season_number }
-                .chunked(chunkSize)
-                .flatMap { chunk ->
-                    runBlocking { chunk.parallelCatchingFlatMap(::getEpisodes) }
-                }.reversed()
-        } else {
-            seasons.data.mapIndexed { index, movie ->
+        if (!isSeries) {
+            return seasons.data.mapIndexed { index, movie ->
                 SEpisode.create().apply {
-                    url = EpisodeData(listOf(Triple(movie.id, "", movie.id))).toJsonString()
+                    this.url = EpisodeData(listOf(Triple(movie.id, "", movie.id))).toJsonString()
                     name = "Movie ${index + 1}"
                     episode_number = (index + 1).toFloat()
                     date_upload = DATE_FORMATTER.tryParse(movie.date)
                 }
             }
         }
+
+        val chunkSize = Runtime.getRuntime().availableProcessors()
+        return seasons.data
+            .sortedBy { it.season_number }
+            .chunked(chunkSize)
+            .flatMap { chunk -> chunk.parallelCatchingFlatMap(::getEpisodes) }
+            .reversed()
     }
 
     private fun getEpisodes(seasonData: SeasonResult.Season): List<SEpisode> {
@@ -311,8 +288,6 @@ class Yomiroll : Source() {
         }
     }
 
-    override fun seasonListParse(response: Response): List<SAnime> = throw UnsupportedOperationException()
-
     // ============================ Video Links =============================
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
@@ -342,8 +317,6 @@ class Yomiroll : Source() {
         Log.i("Yomiroll", "Fetching videos for id: ${urlJson.id}")
         return extractVideo(urlJson.id).sort()
     }
-
-    override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
@@ -800,6 +773,8 @@ class Yomiroll : Source() {
         val DATE_FORMATTER by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
         }
+
+        private const val PAGE_SIZE = 36
 
         private const val PREF_QLT_KEY = "preferred_quality"
         private const val PREF_QLT_TITLE = "Preferred quality"
