@@ -27,10 +27,9 @@ class DopeFlixExtractor(
         private val MUTEX = Mutex()
         private var realIndexPairs: List<List<Int>> = emptyList()
 
-        private fun <R> runLocked(block: () -> R) =
-            runBlocking(Dispatchers.IO) {
-                MUTEX.withLock { block() }
-            }
+        private fun <R> runLocked(block: () -> R) = runBlocking(Dispatchers.IO) {
+            MUTEX.withLock { block() }
+        }
     }
 
     private fun generateIndexPairs(): List<List<Int>> {

@@ -50,7 +50,8 @@ class VidsrcExtractor(private val client: OkHttpClient, private val headers: Hea
 
         val data = runCatching {
             response.parseAs<MediaResponseBody>()
-        }.getOrElse { // Keys are out of date
+        }.getOrElse {
+            // Keys are out of date
             val newKeys = noCacheClient.newCall(
                 GET("https://raw.githubusercontent.com/KillerDogeEmpire/vidplay-keys/keys/keys.json", cache = cacheControl),
             ).execute().parseAs<List<String>>()
@@ -135,17 +136,15 @@ class VidsrcExtractor(private val client: OkHttpClient, private val headers: Hea
         }
     }
 
-    private fun List<MediaResponseBody.Result.SubTrack>.toTracks(): List<Track> {
-        return filter {
-            it.kind == "captions"
-        }.mapNotNull {
-            runCatching {
-                Track(
-                    it.file,
-                    it.label,
-                )
-            }.getOrNull()
-        }
+    private fun List<MediaResponseBody.Result.SubTrack>.toTracks(): List<Track> = filter {
+        it.kind == "captions"
+    }.mapNotNull {
+        runCatching {
+            Track(
+                it.file,
+                it.label,
+            )
+        }.getOrNull()
     }
 }
 

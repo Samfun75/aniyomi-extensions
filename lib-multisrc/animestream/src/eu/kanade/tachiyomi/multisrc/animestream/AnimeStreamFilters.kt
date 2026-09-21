@@ -9,9 +9,9 @@ object AnimeStreamFilters {
         displayName: String,
         val vals: Array<Pair<String, String>>,
     ) : AnimeFilter.Select<String>(
-            displayName,
-            vals.map { it.first }.toTypedArray(),
-        ) {
+        displayName,
+        vals.map { it.first }.toTypedArray(),
+    ) {
         fun toQueryPart() = vals[state].second
     }
 
@@ -32,13 +32,12 @@ object AnimeStreamFilters {
     inline fun <reified R> AnimeFilterList.parseCheckbox(
         options: Array<Pair<String, String>>,
         name: String,
-    ): String =
-        (getFirst<R>() as CheckBoxFilterList)
-            .state
-            .filter { it.state }
-            .map { checkbox -> options.find { it.first == checkbox.name }!!.second }
-            .filter(String::isNotBlank)
-            .joinToString("&") { "$name[]=$it" }
+    ): String = (getFirst<R>() as CheckBoxFilterList)
+        .state
+        .filter { it.state }
+        .map { checkbox -> options.find { it.first == checkbox.name }!!.second }
+        .filter(String::isNotBlank)
+        .joinToString("&") { "$name[]=$it" }
 
     internal class GenresFilter(
         name: String,
@@ -96,15 +95,14 @@ object AnimeStreamFilters {
 
     fun filterInitialized() = ::filterElements.isInitialized
 
-    fun getPairListByIndex(index: Int) =
-        filterElements
-            .get(index)
-            .select("li")
-            .map { element ->
-                val key = element.selectFirst("label")!!.text()
-                val value = element.selectFirst("input")!!.attr("value")
-                Pair(key, value)
-            }.toTypedArray()
+    fun getPairListByIndex(index: Int) = filterElements
+        .get(index)
+        .select("li")
+        .map { element ->
+            val key = element.selectFirst("label")!!.text()
+            val value = element.selectFirst("input")!!.attr("value")
+            Pair(key, value)
+        }.toTypedArray()
 
     private val GENRES_LIST by lazy { getPairListByIndex(0) }
     private val SEASON_LIST by lazy { getPairListByIndex(1) }

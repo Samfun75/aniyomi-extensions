@@ -18,8 +18,9 @@ class StreamHideVidExtractor(private val client: OkHttpClient) {
             .substringAfter("src:\"") // StreamVid
             .substringBefore('"')
         if (!playlistUrl.startsWith("http")) return emptyList()
-        return playlistUtils.extractFromHls(playlistUrl,
-            videoNameGen = { "${prefix}StreamHideVid - $it" }
+        return playlistUtils.extractFromHls(
+            playlistUrl,
+            videoNameGen = { "${prefix}StreamHideVid - $it" },
         )
     }
 }

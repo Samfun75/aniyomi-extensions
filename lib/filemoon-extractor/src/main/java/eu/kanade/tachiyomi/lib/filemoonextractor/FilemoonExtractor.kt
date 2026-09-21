@@ -41,7 +41,8 @@ class FilemoonExtractor(private val client: OkHttpClient) {
                     .substringBefore("').")
                     .takeIf(String::isNotBlank)
             if (subUrl != null) {
-                runCatching { // to prevent failures on serialization errors
+                runCatching {
+                    // to prevent failures on serialization errors
                     client.newCall(GET(subUrl, videoHeaders)).execute()
                         .body.string()
                         .let { json.decodeFromString<List<SubtitleDto>>(it) }

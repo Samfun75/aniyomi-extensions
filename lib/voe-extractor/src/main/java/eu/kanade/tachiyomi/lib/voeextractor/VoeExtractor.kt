@@ -42,8 +42,9 @@ class VoeExtractor(private val client: OkHttpClient) {
             }
             else -> return emptyList()
         }
-        return playlistUtils.extractFromHls(playlistUrl,
-            videoNameGen = { quality -> "${prefix}Voe: $quality" }
+        return playlistUtils.extractFromHls(
+            playlistUrl,
+            videoNameGen = { quality -> "${prefix}Voe: $quality" },
         )
     }
 }

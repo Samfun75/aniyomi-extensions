@@ -8,9 +8,9 @@ object DopeFlixFilters {
         displayName: String,
         val vals: Array<Pair<String, String>>,
     ) : AnimeFilter.Select<String>(
-            displayName,
-            vals.map { it.first }.toTypedArray(),
-        ) {
+        displayName,
+        vals.map { it.first }.toTypedArray(),
+    ) {
         fun toQueryPart() = vals[state].second
     }
 
@@ -28,12 +28,11 @@ object DopeFlixFilters {
 
     private inline fun <reified R> AnimeFilterList.getFirst(): R = first { it is R } as R
 
-    private inline fun <reified R> AnimeFilterList.parseCheckbox(options: Array<Pair<String, String>>): String =
-        (getFirst<R>() as CheckBoxFilterList)
-            .state
-            .filter { it.state }
-            .map { checkbox -> options.find { it.first == checkbox.name }!!.second }
-            .joinToString("-") { it.ifBlank { "all" } }
+    private inline fun <reified R> AnimeFilterList.parseCheckbox(options: Array<Pair<String, String>>): String = (getFirst<R>() as CheckBoxFilterList)
+        .state
+        .filter { it.state }
+        .map { checkbox -> options.find { it.first == checkbox.name }!!.second }
+        .joinToString("-") { it.ifBlank { "all" } }
 
     class TypeFilter : QueryPartFilter("Type", DopeFlixFiltersData.TYPES)
 

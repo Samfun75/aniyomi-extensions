@@ -40,18 +40,17 @@ abstract class DataLifeEngine(
 
     override fun popularAnimeNextPageSelector(): String = "span.navigation > span:not(.nav_ext) + a"
 
-    override fun popularAnimeFromElement(element: Element): SAnime =
-        SAnime.create().apply {
-            setUrlWithoutDomain(
-                element
-                    .selectFirst("a[href]")!!
-                    .attr("href")
-                    .toHttpUrl()
-                    .encodedPath,
-            )
-            thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
-            title = "${element.selectFirst("a[href]")!!.text()} ${element.selectFirst("span.block-sai")?.text() ?: ""}"
-        }
+    override fun popularAnimeFromElement(element: Element): SAnime = SAnime.create().apply {
+        setUrlWithoutDomain(
+            element
+                .selectFirst("a[href]")!!
+                .attr("href")
+                .toHttpUrl()
+                .encodedPath,
+        )
+        thumbnail_url = element.selectFirst("img[src]")?.absUrl("src") ?: ""
+        title = "${element.selectFirst("a[href]")!!.text()} ${element.selectFirst("span.block-sai")?.text() ?: ""}"
+    }
 
     // =============================== Latest ===============================
 
@@ -136,26 +135,25 @@ abstract class DataLifeEngine(
 
     abstract val genres: Array<Pair<String, String>>
 
-    override fun getFilterList(): AnimeFilterList =
-        AnimeFilterList(
-            AnimeFilter.Header("La recherche de texte ignore les filtres"),
-            SubPageFilter(categories),
-            GenreFilter(genres),
-        )
+    override fun getFilterList(): AnimeFilterList = AnimeFilterList(
+        AnimeFilter.Header("La recherche de texte ignore les filtres"),
+        SubPageFilter(categories),
+        GenreFilter(genres),
+    )
 
     private class SubPageFilter(
         categories: Array<Pair<String, String>>,
     ) : UriPartFilter(
-            "Catégories",
-            categories,
-        )
+        "Catégories",
+        categories,
+    )
 
     private class GenreFilter(
         genres: Array<Pair<String, String>>,
     ) : UriPartFilter(
-            "Genres",
-            genres,
-        )
+        "Genres",
+        genres,
+    )
 
     private open class UriPartFilter(
         displayName: String,
@@ -165,13 +163,12 @@ abstract class DataLifeEngine(
     }
     // =========================== Anime Details ============================
 
-    override suspend fun getAnimeDetails(anime: SAnime): SAnime =
-        client
-            .newCall(animeDetailsRequest(anime))
-            .awaitSuccess()
-            .let { response ->
-                animeDetailsParse(response, anime).apply { initialized = true }
-            }
+    override suspend fun getAnimeDetails(anime: SAnime): SAnime = client
+        .newCall(animeDetailsRequest(anime))
+        .awaitSuccess()
+        .let { response ->
+            animeDetailsParse(response, anime).apply { initialized = true }
+        }
 
     override fun animeDetailsParse(document: Document): SAnime = throw UnsupportedOperationException()
 
@@ -194,14 +191,13 @@ abstract class DataLifeEngine(
     // ============================= Utilities ==============================
 
     @JvmName("sortSEpisode")
-    fun List<SEpisode>.sort(): List<SEpisode> =
-        this
-            .sortedWith(
-                compareBy(
-                    { it.scanlator },
-                    { it.episode_number },
-                ),
-            ).reversed()
+    fun List<SEpisode>.sort(): List<SEpisode> = this
+        .sortedWith(
+            compareBy(
+                { it.scanlator },
+                { it.episode_number },
+            ),
+        ).reversed()
 
     fun List<Video>.sort(): List<Video> {
         val quality = preferences.getString("preferred_quality", "720")!!

@@ -42,15 +42,13 @@ class OkruExtractor(private val client: OkHttpClient) {
         }
     }
 
-    private fun String.addPrefix(prefix: String) =
-        prefix.takeIf(String::isNotBlank)
-            ?.let { "$prefix $this" }
-            ?: this
+    private fun String.addPrefix(prefix: String) = prefix.takeIf(String::isNotBlank)
+        ?.let { "$prefix $this" }
+        ?: this
 
-    private fun String.extractLink(attr: String) =
-        substringAfter("$attr\\\":\\\"")
-            .substringBefore("\\\"")
-            .replace("\\\\u0026", "&")
+    private fun String.extractLink(attr: String) = substringAfter("$attr\\\":\\\"")
+        .substringBefore("\\\"")
+        .replace("\\\\u0026", "&")
 
     private fun videosFromJson(videoString: String, prefix: String = "", fixQualities: Boolean = true): List<Video> {
         val arrayData = videoString.substringAfter("\\\"videos\\\":[{\\\"name\\\":\\\"")

@@ -34,17 +34,15 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         videoNameGen: (String) -> String = { quality -> quality },
         subtitleList: List<Track> = emptyList(),
         audioList: List<Track> = emptyList(),
-    ): List<Video> {
-        return extractFromHls(
-            playlistUrl,
-            referer,
-            { _, _ -> masterHeaders },
-            { _, _, _ -> videoHeaders },
-            videoNameGen,
-            subtitleList,
-            audioList,
-        )
-    }
+    ): List<Video> = extractFromHls(
+        playlistUrl,
+        referer,
+        { _, _ -> masterHeaders },
+        { _, _, _ -> videoHeaders },
+        videoNameGen,
+        subtitleList,
+        audioList,
+    )
 
     /**
      * Extracts videos from a .m3u8 file.
@@ -134,7 +132,7 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
             } ?: return@mapNotNull null
 
             Video(
-                videoUrl =  videoUrl,
+                videoUrl = videoUrl,
                 videoTitle = videoNameGen(resolution),
                 headers = videoHeadersGen(headers, referer, videoUrl),
                 subtitleTracks = subtitleTracks,
@@ -143,26 +141,22 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         }
     }
 
-    private fun getAbsoluteUrl(url: String, playlistUrl: String, masterBase: String): String? {
-        return when {
-            url.isEmpty() -> null
-            url.startsWith("http") -> url
-            url.startsWith("//") -> "https:$url"
-            url.startsWith("/") -> playlistUrl.toHttpUrl().newBuilder().encodedPath("/").build().toString()
-                .substringBeforeLast("/") + url
-            else -> masterBase + url
-        }
+    private fun getAbsoluteUrl(url: String, playlistUrl: String, masterBase: String): String? = when {
+        url.isEmpty() -> null
+        url.startsWith("http") -> url
+        url.startsWith("//") -> "https:$url"
+        url.startsWith("/") -> playlistUrl.toHttpUrl().newBuilder().encodedPath("/").build().toString()
+            .substringBeforeLast("/") + url
+        else -> masterBase + url
     }
 
-    fun generateMasterHeaders(baseHeaders: Headers, referer: String): Headers {
-        return baseHeaders.newBuilder().apply {
-            set("Accept", "*/*")
-            if (referer.isNotEmpty()) {
-                set("Origin", "https://${referer.toHttpUrl().host}")
-                set("Referer", referer)
-            }
-        }.build()
-    }
+    fun generateMasterHeaders(baseHeaders: Headers, referer: String): Headers = baseHeaders.newBuilder().apply {
+        set("Accept", "*/*")
+        if (referer.isNotEmpty()) {
+            set("Origin", "https://${referer.toHttpUrl().host}")
+            set("Referer", referer)
+        }
+    }.build()
 
     // ================================ DASH ================================
 
@@ -188,19 +182,17 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         referer: String = "",
         subtitleList: List<Track> = emptyList(),
         audioList: List<Track> = emptyList(),
-    ): List<Video> {
-        return extractFromDash(
-            mpdUrl,
-            { videoRes, bandwidth ->
-                videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
-            },
-            referer,
-            { _, _ -> mpdHeaders },
-            { _, _, _ -> videoHeaders },
-            subtitleList,
-            audioList,
-        )
-    }
+    ): List<Video> = extractFromDash(
+        mpdUrl,
+        { videoRes, bandwidth ->
+            videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
+        },
+        referer,
+        { _, _ -> mpdHeaders },
+        { _, _, _ -> videoHeaders },
+        subtitleList,
+        audioList,
+    )
 
     /**
      * Extracts video information from a DASH .mpd file.
@@ -235,19 +227,17 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         },
         subtitleList: List<Track> = emptyList(),
         audioList: List<Track> = emptyList(),
-    ): List<Video> {
-        return extractFromDash(
-            mpdUrl,
-            { videoRes, bandwidth ->
-                videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
-            },
-            referer,
-            mpdHeadersGen,
-            videoHeadersGen,
-            subtitleList,
-            audioList,
-        )
-    }
+    ): List<Video> = extractFromDash(
+        mpdUrl,
+        { videoRes, bandwidth ->
+            videoNameGen(videoRes) + " - ${formatBytes(bandwidth.toLongOrNull())}"
+        },
+        referer,
+        mpdHeadersGen,
+        videoHeadersGen,
+        subtitleList,
+        audioList,
+    )
 
     /**
      * Extracts video information from a DASH .mpd file.
@@ -310,16 +300,14 @@ class PlaylistUtils(private val client: OkHttpClient, private val headers: Heade
         }
     }
 
-    private fun formatBytes(bytes: Long?): String {
-        return when {
-            bytes == null -> ""
-            bytes >= 1_000_000_000 -> "%.2f GB/s".format(bytes / 1_000_000_000.0)
-            bytes >= 1_000_000 -> "%.2f MB/s".format(bytes / 1_000_000.0)
-            bytes >= 1_000 -> "%.2f KB/s".format(bytes / 1_000.0)
-            bytes > 1 -> "$bytes bytes/s"
-            bytes == 1L -> "$bytes byte/s"
-            else -> ""
-        }
+    private fun formatBytes(bytes: Long?): String = when {
+        bytes == null -> ""
+        bytes >= 1_000_000_000 -> "%.2f GB/s".format(bytes / 1_000_000_000.0)
+        bytes >= 1_000_000 -> "%.2f MB/s".format(bytes / 1_000_000.0)
+        bytes >= 1_000 -> "%.2f KB/s".format(bytes / 1_000.0)
+        bytes > 1 -> "$bytes bytes/s"
+        bytes == 1L -> "$bytes byte/s"
+        else -> ""
     }
 
     // ============================= Utilities ==============================

@@ -56,13 +56,12 @@ abstract class DopeFlix(
         return GET("$baseUrl/$type?page=$page")
     }
 
-    override fun popularAnimeFromElement(element: Element) =
-        SAnime.create().apply {
-            val ahref = element.selectFirst("a")!!
-            setUrlWithoutDomain(ahref.attr("href"))
-            title = ahref.attr("title")
-            thumbnail_url = element.selectFirst("img")!!.attr("data-src")
-        }
+    override fun popularAnimeFromElement(element: Element) = SAnime.create().apply {
+        val ahref = element.selectFirst("a")!!
+        setUrlWithoutDomain(ahref.attr("href"))
+        title = ahref.attr("title")
+        thumbnail_url = element.selectFirst("img")!!.attr("data-src")
+    }
 
     override fun popularAnimeNextPageSelector() = "ul.pagination li.page-item a[title=next]"
 
@@ -116,25 +115,23 @@ abstract class DopeFlix(
     override fun getFilterList() = DopeFlixFilters.FILTER_LIST
 
     // =========================== Anime Details ============================
-    override fun animeDetailsParse(document: Document) =
-        SAnime.create().apply {
-            thumbnail_url = document.selectFirst("img.film-poster-img")!!.attr("src")
-            title = document.selectFirst("img.film-poster-img")!!.attr("title")
-            genre = document.select("div.row-line:contains(Genre) a").eachText().joinToString()
-            description =
-                document
-                    .selectFirst("div.detail_page-watch div.description")!!
-                    .text()
-                    .replace("Overview:", "")
-            author = document.select("div.row-line:contains(Production) a").eachText().joinToString()
-            status = parseStatus(document.selectFirst("li.status span.value")?.text())
-        }
+    override fun animeDetailsParse(document: Document) = SAnime.create().apply {
+        thumbnail_url = document.selectFirst("img.film-poster-img")!!.attr("src")
+        title = document.selectFirst("img.film-poster-img")!!.attr("title")
+        genre = document.select("div.row-line:contains(Genre) a").eachText().joinToString()
+        description =
+            document
+                .selectFirst("div.detail_page-watch div.description")!!
+                .text()
+                .replace("Overview:", "")
+        author = document.select("div.row-line:contains(Production) a").eachText().joinToString()
+        status = parseStatus(document.selectFirst("li.status span.value")?.text())
+    }
 
-    private fun parseStatus(statusString: String?): Int =
-        when (statusString?.trim()) {
-            "Ongoing" -> SAnime.ONGOING
-            else -> SAnime.COMPLETED
-        }
+    private fun parseStatus(statusString: String?): Int = when (statusString?.trim()) {
+        "Ongoing" -> SAnime.ONGOING
+        else -> SAnime.COMPLETED
+    }
 
     // ============================== Episodes ==============================
     override fun episodeListSelector() = throw UnsupportedOperationException()

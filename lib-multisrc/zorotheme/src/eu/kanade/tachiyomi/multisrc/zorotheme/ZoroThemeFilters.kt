@@ -8,9 +8,9 @@ object ZoroThemeFilters {
         displayName: String,
         val vals: Array<Pair<String, String>>,
     ) : AnimeFilter.Select<String>(
-            displayName,
-            vals.map { it.first }.toTypedArray(),
-        ) {
+        displayName,
+        vals.map { it.first }.toTypedArray(),
+    ) {
         fun toQueryPart() = vals[state].second
     }
 
@@ -24,10 +24,9 @@ object ZoroThemeFilters {
         state: Boolean = false,
     ) : AnimeFilter.CheckBox(name, state)
 
-    private inline fun <reified R> AnimeFilterList.asQueryPart(): String =
-        this.filterIsInstance<R>().joinToString("") {
-            (it as QueryPartFilter).toQueryPart()
-        }
+    private inline fun <reified R> AnimeFilterList.asQueryPart(): String = this.filterIsInstance<R>().joinToString("") {
+        (it as QueryPartFilter).toQueryPart()
+    }
 
     class TypeFilter : QueryPartFilter("Type", ZoroThemeFiltersData.TYPES)
 

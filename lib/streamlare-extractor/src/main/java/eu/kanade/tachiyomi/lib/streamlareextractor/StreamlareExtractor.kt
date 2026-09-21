@@ -48,10 +48,9 @@ class StreamlareExtractor(private val client: OkHttpClient) {
         }
     }
 
-    private fun buildQuality(resolution: String, prefix: String = "", suffix: String = "") =
-        buildString {
-            if (prefix.isNotBlank()) append("$prefix ")
-            append("Streamlare:$resolution")
-            if (suffix.isNotBlank()) append(" $suffix")
-        }
+    private fun buildQuality(resolution: String, prefix: String = "", suffix: String = "") = buildString {
+        if (prefix.isNotBlank()) append("$prefix ")
+        append("Streamlare:$resolution")
+        if (suffix.isNotBlank()) append(" $suffix")
+    }
 }

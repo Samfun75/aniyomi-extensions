@@ -71,19 +71,18 @@ abstract class ZoroTheme(
 
     override fun popularAnimeSelector(): String = "div.flw-item"
 
-    override fun popularAnimeFromElement(element: Element) =
-        SAnime.create().apply {
-            element.selectFirst("div.film-detail a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title =
-                    if (useEnglish && it.hasAttr("title")) {
-                        it.attr("title")
-                    } else {
-                        it.attr("data-jname")
-                    }
-            }
-            thumbnail_url = element.selectFirst("div.film-poster > img")!!.attr("data-src")
+    override fun popularAnimeFromElement(element: Element) = SAnime.create().apply {
+        element.selectFirst("div.film-detail a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title =
+                if (useEnglish && it.hasAttr("title")) {
+                    it.attr("title")
+                } else {
+                    it.attr("data-jname")
+                }
         }
+        thumbnail_url = element.selectFirst("div.film-poster > img")!!.attr("data-src")
+    }
 
     override fun popularAnimeNextPageSelector() = "li.page-item a[title=Next]"
 
@@ -145,25 +144,24 @@ abstract class ZoroTheme(
 
     // =========================== Anime Details ============================
 
-    override fun animeDetailsParse(document: Document) =
-        SAnime.create().apply {
-            thumbnail_url = document.selectFirst("div.anisc-poster img")!!.attr("src")
+    override fun animeDetailsParse(document: Document) = SAnime.create().apply {
+        thumbnail_url = document.selectFirst("div.anisc-poster img")!!.attr("src")
 
-            document.selectFirst("div.anisc-info")!!.let { info ->
-                author = info.getInfo("Studios:")
-                status = parseStatus(info.getInfo("Status:"))
-                genre = info.getInfo("Genres:", isList = true)
+        document.selectFirst("div.anisc-info")!!.let { info ->
+            author = info.getInfo("Studios:")
+            status = parseStatus(info.getInfo("Status:"))
+            genre = info.getInfo("Genres:", isList = true)
 
-                description =
-                    buildString {
-                        info.getInfo("Overview:")?.also { append(it + "\n") }
-                        info.getInfo("Aired:", full = true)?.also(::append)
-                        info.getInfo("Premiered:", full = true)?.also(::append)
-                        info.getInfo("Synonyms:", full = true)?.also(::append)
-                        info.getInfo("Japanese:", full = true)?.also(::append)
-                    }
-            }
+            description =
+                buildString {
+                    info.getInfo("Overview:")?.also { append(it + "\n") }
+                    info.getInfo("Aired:", full = true)?.also(::append)
+                    info.getInfo("Premiered:", full = true)?.also(::append)
+                    info.getInfo("Synonyms:", full = true)?.also(::append)
+                    info.getInfo("Japanese:", full = true)?.also(::append)
+                }
         }
+    }
 
     private fun Element.getInfo(
         tag: String,
@@ -180,12 +178,11 @@ abstract class ZoroTheme(
         return if (full && value != null) "\n$tag $value" else value
     }
 
-    private fun parseStatus(statusString: String?): Int =
-        when (statusString) {
-            "Currently Airing" -> SAnime.ONGOING
-            "Finished Airing" -> SAnime.COMPLETED
-            else -> SAnime.UNKNOWN
-        }
+    private fun parseStatus(statusString: String?): Int = when (statusString) {
+        "Currently Airing" -> SAnime.ONGOING
+        "Finished Airing" -> SAnime.COMPLETED
+        else -> SAnime.UNKNOWN
+    }
 
     // ============================== Episodes ==============================
 
@@ -205,15 +202,14 @@ abstract class ZoroTheme(
             .reversed()
     }
 
-    override fun episodeFromElement(element: Element) =
-        SEpisode.create().apply {
-            episode_number = element.attr("data-number").toFloatOrNull() ?: 1F
-            name = "Ep. ${element.attr("data-number")}: ${element.attr("title")}"
-            setUrlWithoutDomain(element.attr("href"))
-            if (element.hasClass("ssl-item-filler") && markFiller) {
-                scanlator = "Filler Episode"
-            }
+    override fun episodeFromElement(element: Element) = SEpisode.create().apply {
+        episode_number = element.attr("data-number").toFloatOrNull() ?: 1F
+        name = "Ep. ${element.attr("data-number")}: ${element.attr("title")}"
+        setUrlWithoutDomain(element.attr("href"))
+        if (element.hasClass("ssl-item-filler") && markFiller) {
+            scanlator = "Filler Episode"
         }
+    }
 
     // ============================ Video Links =============================
 
@@ -287,15 +283,14 @@ abstract class ZoroTheme(
         ignoreCase: Boolean,
     ): Boolean = any { it.equals(s, ignoreCase) }
 
-    private fun apiHeaders(referer: String): Headers =
-        headers
-            .newBuilder()
-            .apply {
-                add("Accept", "*/*")
-                add("Host", baseUrl.toHttpUrl().host)
-                add("Referer", referer)
-                add("X-Requested-With", "XMLHttpRequest")
-            }.build()
+    private fun apiHeaders(referer: String): Headers = headers
+        .newBuilder()
+        .apply {
+            add("Accept", "*/*")
+            add("Host", baseUrl.toHttpUrl().host)
+            add("Referer", referer)
+            add("X-Requested-With", "XMLHttpRequest")
+        }.build()
 
     private fun HttpUrl.Builder.addIfNotBlank(
         query: String,
