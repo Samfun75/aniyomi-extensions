@@ -54,6 +54,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.io.encoding.Base64
+import kotlin.time.Duration.Companion.milliseconds
 
 class Yomiroll : Source() {
     // No more renaming, no matter what 3rd party service is used :)
@@ -445,7 +446,7 @@ class Yomiroll : Source() {
         mainScope.launch {
             async {
                 withContext(Dispatchers.IO) {
-                    delay(2_000)
+                    delay(2_000.milliseconds)
                     runCatching {
                         client
                             .newCall(
