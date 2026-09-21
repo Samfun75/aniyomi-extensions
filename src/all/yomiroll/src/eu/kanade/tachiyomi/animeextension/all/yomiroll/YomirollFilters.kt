@@ -8,9 +8,9 @@ object YomirollFilters {
         displayName: String,
         val vals: Array<Pair<String, String>>,
     ) : AnimeFilter.Select<String>(
-            displayName,
-            vals.map { it.first }.toTypedArray(),
-        ) {
+        displayName,
+        vals.map { it.first }.toTypedArray(),
+    ) {
         fun toQueryPart() = vals[state].second
     }
 
@@ -28,16 +28,15 @@ object YomirollFilters {
 
     private inline fun <reified R> AnimeFilterList.getFirst(): R = this.filterIsInstance<R>().first()
 
-    private inline fun <reified R> AnimeFilterList.parseCheckbox(options: Array<Pair<String, String>>): String =
-        (this.getFirst<R>() as CheckBoxFilterList)
-            .state
-            .mapNotNull { checkbox ->
-                if (checkbox.state) {
-                    options.find { it.first == checkbox.name }!!.second
-                } else {
-                    null
-                }
-            }.joinToString("")
+    private inline fun <reified R> AnimeFilterList.parseCheckbox(options: Array<Pair<String, String>>): String = (this.getFirst<R>() as CheckBoxFilterList)
+        .state
+        .mapNotNull { checkbox ->
+            if (checkbox.state) {
+                options.find { it.first == checkbox.name }!!.second
+            } else {
+                null
+            }
+        }.joinToString("")
 
     class TypeFilter : QueryPartFilter("Type", CrunchyFiltersData.SEARCH_TYPE)
 

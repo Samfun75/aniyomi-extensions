@@ -1,15 +1,10 @@
 package eu.kanade.tachiyomi.animeextension.all.yomiroll
 
-import android.app.Application
-import android.content.Context
-import android.content.SharedPreferences
 import android.net.Uri
 import android.text.InputType
 import android.util.Log
-import androidx.preference.ListPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.ChapterType
@@ -20,17 +15,23 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.TimeStamp
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.util.parallelCatchingFlatMap
-import eu.kanade.tachiyomi.util.parallelCatchingFlatMapBlocking
-import eu.kanade.tachiyomi.util.parseAs
+import extensions.utils.Source
+import extensions.utils.addEditTextPreference
+import extensions.utils.addListPreference
+import extensions.utils.delegate
+import extensions.utils.getSwitchPreference
+import extensions.utils.parallelCatchingFlatMap
+import extensions.utils.parseAs
+import extensions.utils.toJsonString
+import extensions.utils.tryParse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import okhttp3.CookieJar
@@ -48,16 +49,12 @@ import org.samfun.ktvine.core.PSSH
 import org.samfun.ktvine.proto.License.KeyContainer.KeyType
 import org.samfun.ktvine.proto.LicenseType
 import org.samfun.ktvine.utils.toHexString
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.io.encoding.Base64
 
-class Yomiroll :
-    AnimeHttpSource(),
-    ConfigurableAnimeSource {
+class Yomiroll : Source() {
     // No more renaming, no matter what 3rd party service is used :)
     override val name = "Yomiroll"
 
@@ -70,11 +67,14 @@ class Yomiroll :
 
     override val supportsLatest = true
 
-    private val mainScope by lazy { MainScope() }
+    override val json = JSON
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferredQuality by preferences.delegate(PREF_QLT_KEY, PREF_QLT_DEFAULT)
+    private val preferredAudio by preferences.delegate(PREF_AUD_KEY, PREF_AUD_DEFAULT)
+    private val preferredSub by preferences.delegate(PREF_SUB_KEY, PREF_SUB_DEFAULT)
+    private val preferredSubType by preferences.delegate(PREF_SUB_TYPE_KEY, PREF_SUB_TYPE_DEFAULT)
+
+    private val mainScope by lazy { MainScope() }
 
     private val tokenInterceptor by lazy {
         AccessTokenInterceptor(crUrl, preferences)
@@ -99,7 +99,7 @@ class Yomiroll :
     }
 
     override fun popularAnimeParse(response: Response): AnimesPage {
-        val parsed = JSON.decodeFromString<AnimeResult>(response.body.string())
+        val parsed = response.parseAs<AnimeResult>()
         val animeList = parsed.data.mapNotNull { it.toSAnimeOrNull() }
         val position =
             response.request.url
@@ -143,11 +143,11 @@ class Yomiroll :
             if (response.request.url.encodedPath
                     .contains("search")
             ) {
-                val parsed = JSON.decodeFromString<SearchAnimeResult>(bod).data.first()
+                val parsed = bod.parseAs<SearchAnimeResult>().data.first()
                 total = parsed.count
                 parsed.items
             } else {
-                val parsed = JSON.decodeFromString<AnimeResult>(bod)
+                val parsed = bod.parseAs<AnimeResult>()
                 total = parsed.total
                 parsed.data
             }
@@ -199,7 +199,7 @@ class Yomiroll :
                 .body
                 .string()
 
-        val responseParsed = JSON.decodeFromString<AnilistResult>(response)
+        val responseParsed = response.parseAs<AnilistResult>()
 
         return when (responseParsed.data.media?.status) {
             "FINISHED" -> SAnime.COMPLETED
@@ -211,7 +211,7 @@ class Yomiroll :
     }
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
-        val mediaId = JSON.decodeFromString<LinkData>(anime.url)
+        val mediaId = anime.url.parseAs<LinkData>()
         val resp =
             client
                 .newCall(
@@ -223,7 +223,7 @@ class Yomiroll :
                 ).execute()
                 .body
                 .string()
-        val info = JSON.decodeFromString<AnimeResult>(resp)
+        val info = resp.parseAs<AnimeResult>()
         return info.data.first().toSAnimeOrNull(anime) ?: anime
     }
 
@@ -232,7 +232,7 @@ class Yomiroll :
     // ============================== Episodes ==============================
 
     override fun episodeListRequest(anime: SAnime): Request {
-        val mediaId = JSON.decodeFromString<LinkData>(anime.url)
+        val mediaId = anime.url.parseAs<LinkData>()
         return if (mediaId.media_type == "series") {
             GET("$crApiUrl/cms/series/${mediaId.id}/seasons")
         } else {
@@ -241,7 +241,7 @@ class Yomiroll :
     }
 
     override fun episodeListParse(response: Response): List<SEpisode> {
-        val seasons = JSON.decodeFromString<SeasonResult>(response.body.string())
+        val seasons = response.parseAs<SeasonResult>()
         val series =
             response.request.url.encodedPath
                 .contains("series/")
@@ -251,7 +251,7 @@ class Yomiroll :
                 .sortedBy { it.season_number }
                 .chunked(chunkSize)
                 .flatMap { chunk ->
-                    chunk.parallelCatchingFlatMapBlocking(::getEpisodes)
+                    runBlocking { chunk.parallelCatchingFlatMap(::getEpisodes) }
                 }.reversed()
         } else {
             seasons.data.mapIndexed { index, movie ->
@@ -259,7 +259,7 @@ class Yomiroll :
                     url = EpisodeData(listOf(Triple(movie.id, "", movie.id))).toJsonString()
                     name = "Movie ${index + 1}"
                     episode_number = (index + 1).toFloat()
-                    date_upload = movie.date?.let(::parseDate) ?: 0L
+                    date_upload = DATE_FORMATTER.tryParse(movie.date)
                 }
             }
         }
@@ -272,7 +272,7 @@ class Yomiroll :
                 .execute()
                 .body
                 .string()
-        val episodes = JSON.decodeFromString<EpisodeResult>(body)
+        val episodes = body.parseAs<EpisodeResult>()
 
         return episodes.data.sortedBy { it.episodeNumber }.mapNotNull EpisodeMap@{ ep ->
             SEpisode.create().apply {
@@ -300,7 +300,7 @@ class Yomiroll :
                         ep.title
                     }
                 episode_number = ep.episodeNumber
-                date_upload = ep.airDate?.let(::parseDate) ?: 0L
+                date_upload = DATE_FORMATTER.tryParse(ep.airDate)
                 scanlator = ep.versions?.sortedBy { it.audioLocale }?.joinToString {
                     buildString {
                         append(it.audioLocale.substringBefore("-"))
@@ -316,9 +316,8 @@ class Yomiroll :
     // ============================ Video Links =============================
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
-        val urlJson = JSON.decodeFromString<EpisodeData>(episode.url)
+        val urlJson = episode.url.parseAs<EpisodeData>()
         Log.i("Yomiroll", "Fetching hosters for episode with IDs: ${urlJson.ids}")
-        val dubLocale = preferences.getString(PREF_AUD_KEY, PREF_AUD_DEFAULT)!!
 
         if (urlJson.ids.isEmpty()) throw Exception("No IDs found for episode")
 
@@ -327,11 +326,11 @@ class Yomiroll :
                 Hoster(
                     hosterUrl = HosterData(idData).toJsonString(),
                     hosterName =
-                        buildString {
-                            append(idData.second.getLocale())
-                            if (idData.third == "true") append(" 💰")
-                        },
-                    lazy = idData.second != dubLocale,
+                    buildString {
+                        append(idData.second.getLocale())
+                        if (idData.third == "true") append(" 💰")
+                    },
+                    lazy = idData.second != preferredAudio,
                 ),
             )
         }
@@ -339,7 +338,7 @@ class Yomiroll :
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         Log.i("Yomiroll", "Getting video list for hoster: ${hoster.hosterName}")
-        val urlJson = JSON.decodeFromString<HosterData>(hoster.hosterUrl)
+        val urlJson = hoster.hosterUrl.parseAs<HosterData>()
         Log.i("Yomiroll", "Fetching videos for id: ${urlJson.id}")
         return extractVideo(urlJson.id).sort()
     }
@@ -372,16 +371,16 @@ class Yomiroll :
                 .execute()
                 .body
                 .string()
-        val streams = JSON.decodeFromString<VideoStreams>(response)
+        val streams = response.parseAs<VideoStreams>()
         Log.i("Yomiroll", "Streams fetched: ${streams.url}")
 
-        val subLocale = preferences.getString(PREF_SUB_KEY, PREF_SUB_DEFAULT)!!.getLocale()
+        val subLocale = preferredSub.getLocale()
         val subsList =
             runCatching {
                 streams.subtitles
                     ?.entries
                     ?.mapNotNull { (_, value) ->
-                        val sub = JSON.decodeFromString<Subtitle>(value.jsonObject.toString())
+                        val sub = value.jsonObject.toString().parseAs<Subtitle>()
                         sub.url?.let { Track(it, sub.language.getLocale()) }
                     }?.sortedWith(
                         compareByDescending<Track> { it.lang.contains(subLocale) }.thenBy { it.lang },
@@ -456,12 +455,12 @@ class Yomiroll :
                                 end = timestamp.end,
                                 name = timestamp.type.replaceFirstChar { it.uppercaseChar() },
                                 type =
-                                    when (timestamp.type) {
-                                        "intro" -> ChapterType.Opening
-                                        "credits" -> ChapterType.Ending
-                                        "recap" -> ChapterType.Recap
-                                        else -> ChapterType.Other
-                                    },
+                                when (timestamp.type) {
+                                    "intro" -> ChapterType.Opening
+                                    "credits" -> ChapterType.Ending
+                                    "recap" -> ChapterType.Recap
+                                    else -> ChapterType.Other
+                                },
                             )
                         }
                     }
@@ -568,7 +567,7 @@ class Yomiroll :
                 .body
                 .use { it.string() }
 
-        val licenseB64 = JSON.decodeFromString<LicenseResponse>(resp).license
+        val licenseB64 = resp.parseAs<LicenseResponse>().license
         val license = Base64.decode(licenseB64)
 
         cdm.parseLicense(sessionId, license)
@@ -582,284 +581,220 @@ class Yomiroll :
 
     private fun Anime.toSAnimeOrNull(anime: SAnime? = null) = runCatching { toSAnime(anime) }.getOrNull()
 
-    private fun Anime.toSAnime(anime: SAnime? = null): SAnime =
-        SAnime.create().apply {
-            title = this@toSAnime.title
-            thumbnail_url = images.poster_tall
+    private fun Anime.toSAnime(anime: SAnime? = null): SAnime = SAnime.create().apply {
+        title = this@toSAnime.title
+        thumbnail_url = images.poster_tall
+            ?.getOrNull(0)
+            ?.thirdLast()
+            ?.source
+            ?: images.poster_tall
                 ?.getOrNull(0)
-                ?.thirdLast()
+                ?.last()
                 ?.source
-                ?: images.poster_tall
-                    ?.getOrNull(0)
-                    ?.last()
-                    ?.source
-            url = anime?.url ?: LinkData(id, type!!).toJsonString()
-            fetch_type = FetchType.Episodes
-            genre = anime?.genre ?: (
-                series_metadata?.genres ?: movie_metadata?.genres
-                    ?: genres
+        url = anime?.url ?: LinkData(id, type!!).toJsonString()
+        fetch_type = FetchType.Episodes
+        genre = anime?.genre ?: (
+            series_metadata?.genres ?: movie_metadata?.genres
+                ?: genres
             )?.joinToString { gen -> gen.replaceFirstChar { it.uppercase() } }
-            status = anime?.let {
-                val media = JSON.decodeFromString<LinkData>(anime.url)
-                if (media.media_type == "series") {
-                    fetchStatusByTitle(this@toSAnime.title)
-                } else {
-                    SAnime.COMPLETED
-                }
-            } ?: SAnime.UNKNOWN
-            author = content_provider
-            description =
-                StringBuilder()
-                    .apply {
-                        appendLine(this@toSAnime.description)
-                        appendLine()
+        status = anime?.let {
+            val media = anime.url.parseAs<LinkData>()
+            if (media.media_type == "series") {
+                fetchStatusByTitle(this@toSAnime.title)
+            } else {
+                SAnime.COMPLETED
+            }
+        } ?: SAnime.UNKNOWN
+        author = content_provider
+        description =
+            StringBuilder()
+                .apply {
+                    appendLine(this@toSAnime.description)
+                    appendLine()
 
-                        append("Language:")
-                        if ((
-                                subtitle_locales ?: (
-                                    series_metadata
-                                        ?: movie_metadata
+                    append("Language:")
+                    if ((
+                            subtitle_locales ?: (
+                                series_metadata
+                                    ?: movie_metadata
                                 )?.subtitle_locales
                             )?.any() == true ||
-                            (
-                                series_metadata
-                                    ?: movie_metadata
+                        (
+                            series_metadata
+                                ?: movie_metadata
                             )?.is_subbed == true ||
-                            is_subbed == true
-                        ) {
-                            append(" Sub")
-                        }
-                        if ((
-                                (series_metadata?.audio_locales ?: audio_locales)?.size
-                                    ?: 0
+                        is_subbed == true
+                    ) {
+                        append(" Sub")
+                    }
+                    if ((
+                            (series_metadata?.audio_locales ?: audio_locales)?.size
+                                ?: 0
                             ) > 1 ||
-                            (
-                                series_metadata
-                                    ?: movie_metadata
+                        (
+                            series_metadata
+                                ?: movie_metadata
                             )?.is_dubbed == true ||
-                            is_dubbed == true
-                        ) {
-                            append(" Dub")
-                        }
-                        appendLine()
+                        is_dubbed == true
+                    ) {
+                        append(" Dub")
+                    }
+                    appendLine()
 
-                        append("Maturity Ratings: ")
-                        appendLine(
-                            (
-                                (series_metadata ?: movie_metadata)?.maturity_ratings
-                                    ?: maturity_ratings
+                    append("Maturity Ratings: ")
+                    appendLine(
+                        (
+                            (series_metadata ?: movie_metadata)?.maturity_ratings
+                                ?: maturity_ratings
                             )?.joinToString() ?: "-",
-                        )
-                        if (series_metadata?.is_simulcast == true) appendLine("Simulcast")
-                        appendLine()
+                    )
+                    if (series_metadata?.is_simulcast == true) appendLine("Simulcast")
+                    appendLine()
 
-                        append("Audio: ")
-                        appendLine(
-                            (
-                                series_metadata?.audio_locales ?: audio_locales ?: listOf(
-                                    audio_locale ?: "-",
-                                )
+                    append("Audio: ")
+                    appendLine(
+                        (
+                            series_metadata?.audio_locales ?: audio_locales ?: listOf(
+                                audio_locale ?: "-",
+                            )
                             ).sortedBy { it.getLocale() }.joinToString { it.getLocale() },
-                        )
-                        appendLine()
+                    )
+                    appendLine()
 
-                        append("Subs: ")
-                        append(
-                            (
-                                subtitle_locales ?: series_metadata?.subtitle_locales
-                                    ?: movie_metadata?.subtitle_locales
+                    append("Subs: ")
+                    append(
+                        (
+                            subtitle_locales ?: series_metadata?.subtitle_locales
+                                ?: movie_metadata?.subtitle_locales
                             )?.sortedBy { it.getLocale() }
-                                ?.joinToString { it.getLocale() },
-                        )
-                    }.toString()
-        }
+                            ?.joinToString { it.getLocale() },
+                    )
+                }.toString()
+    }
 
     fun List<Video>.sort(): List<Video> {
-        val quality = preferences.getString(PREF_QLT_KEY, PREF_QLT_DEFAULT)!!
-        val dubLocale = preferences.getString(PREF_AUD_KEY, PREF_AUD_DEFAULT)!!
-        val subLocale = preferences.getString(PREF_SUB_KEY, PREF_SUB_DEFAULT)!!
-        val subType = preferences.getString(PREF_SUB_TYPE_KEY, PREF_SUB_TYPE_DEFAULT)!!
-        val shouldContainHard = subType == "hard"
+        val shouldContainHard = preferredSubType == "hard"
 
         return sortedWith(
             compareBy(
-                { "${it.resolution}p".contains(quality) },
-                { it.videoTitle.contains("Aud: ${dubLocale.getLocale()}") },
+                { "${it.resolution}p".contains(preferredQuality) },
+                { it.videoTitle.contains("Aud: ${preferredAudio.getLocale()}") },
                 { it.videoTitle.contains("HardSub") == shouldContainHard },
-                { it.videoTitle.contains(subLocale) },
+                { it.videoTitle.contains(preferredSub) },
             ),
         ).reversed()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context)
-            .apply {
-                key = PREF_QLT_KEY
-                title = PREF_QLT_TITLE
-                entries = PREF_QLT_ENTRIES
-                entryValues = PREF_QLT_VALUES
-                setDefaultValue(PREF_QLT_DEFAULT)
-                summary = "%s"
+        screen.addListPreference(
+            key = PREF_QLT_KEY,
+            default = PREF_QLT_DEFAULT,
+            title = PREF_QLT_TITLE,
+            summary = "%s",
+            entries = PREF_QLT_ENTRIES,
+            entryValues = PREF_QLT_ENTRIES,
+        )
 
-                setOnPreferenceChangeListener { _, newValue ->
-                    val selected = newValue as String
-                    val index = findIndexOfValue(selected)
-                    val entry = entryValues[index] as String
-                    preferences.edit().putString(key, entry).commit()
-                }
-            }.also(screen::addPreference)
+        screen.addListPreference(
+            key = PREF_AUD_KEY,
+            default = PREF_AUD_DEFAULT,
+            title = PREF_AUD_TITLE,
+            summary = "%s",
+            entries = LOCALE.map { it.second },
+            entryValues = LOCALE.map { it.first },
+        )
 
-        ListPreference(screen.context)
-            .apply {
-                key = PREF_AUD_KEY
-                title = PREF_AUD_TITLE
-                entries = LOCALE.map { it.second }.toTypedArray()
-                entryValues = LOCALE.map { it.first }.toTypedArray()
-                setDefaultValue(PREF_AUD_DEFAULT)
-                summary = "%s"
+        screen.addListPreference(
+            key = PREF_SUB_KEY,
+            default = PREF_SUB_DEFAULT,
+            title = PREF_SUB_TITLE,
+            summary = "%s",
+            entries = LOCALE.map { it.second },
+            entryValues = LOCALE.map { it.first },
+        )
 
-                setOnPreferenceChangeListener { _, newValue ->
-                    val selected = newValue as String
-                    val index = findIndexOfValue(selected)
-                    val entry = entryValues[index] as String
-                    preferences.edit().putString(key, entry).commit()
-                }
-            }.also(screen::addPreference)
-
-        ListPreference(screen.context)
-            .apply {
-                key = PREF_SUB_KEY
-                title = PREF_SUB_TITLE
-                entries = LOCALE.map { it.second }.toTypedArray()
-                entryValues = LOCALE.map { it.first }.toTypedArray()
-                setDefaultValue(PREF_SUB_DEFAULT)
-                summary = "%s"
-
-                setOnPreferenceChangeListener { _, newValue ->
-                    val selected = newValue as String
-                    val index = findIndexOfValue(selected)
-                    val entry = entryValues[index] as String
-                    preferences.edit().putString(key, entry).commit()
-                }
-            }.also(screen::addPreference)
-
-        ListPreference(screen.context)
-            .apply {
-                key = PREF_SUB_TYPE_KEY
-                title = PREF_SUB_TYPE_TITLE
-                entries = PREF_SUB_TYPE_ENTRIES
-                entryValues = PREF_SUB_TYPE_VALUES
-                setDefaultValue(PREF_SUB_TYPE_DEFAULT)
-                summary = "%s"
-
-                setOnPreferenceChangeListener { _, newValue ->
-                    val selected = newValue as String
-                    val index = findIndexOfValue(selected)
-                    val entry = entryValues[index] as String
-                    preferences.edit().putString(key, entry).commit()
-                }
-            }.also(screen::addPreference)
+        screen.addListPreference(
+            key = PREF_SUB_TYPE_KEY,
+            default = PREF_SUB_TYPE_DEFAULT,
+            title = PREF_SUB_TYPE_TITLE,
+            summary = "%s",
+            entries = PREF_SUB_TYPE_ENTRIES,
+            entryValues = PREF_SUB_TYPE_VALUES,
+        )
 
         screen.addEditTextPreference(
-            title = "Username",
-            default = USERNAME_DEFAULT,
-            summary = preferences.username.ifBlank { "Username of your CR account" },
             key = USERNAME_KEY,
-            updateSummary = { newValue: String ->
-                newValue.ifBlank { "Username of your CR account" }
-            },
+            default = USERNAME_DEFAULT,
+            title = "Username",
+            summary = preferences.username.ifBlank { USERNAME_HINT },
+            getSummary = { it.ifBlank { USERNAME_HINT } },
         )
 
         screen.addEditTextPreference(
-            title = "Password",
-            default = PASSWORD_DEFAULT,
-            summary =
-                preferences.password.let {
-                    if (it.isBlank()) "Password of your CR account" else "•".repeat(it.length)
-                },
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
             key = PASSWORD_KEY,
-            updateSummary = { newValue: String ->
-                if (newValue.isBlank()) "Password of your CR account" else "•".repeat(newValue.length)
-            },
+            default = PASSWORD_DEFAULT,
+            title = "Password",
+            summary = preferences.password.maskOr(PASSWORD_HINT),
+            getSummary = { it.maskOr(PASSWORD_HINT) },
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
         )
 
         screen.addEditTextPreference(
-            title = "WVD Device",
-            default = WVD_DEVICE_DEFAULT,
-            summary =
-                preferences.wvdDevice.let {
-                    if (it.isBlank()) "Widevine Device (.wvd) in Base64" else "Device Set"
-                },
             key = WVD_DEVICE_KEY,
-            updateSummary = { newValue: String ->
-                if (newValue.isBlank()) "Widevine Device (.wvd) in Base64" else "Device Set"
-            },
+            default = WVD_DEVICE_DEFAULT,
+            title = "WVD Device",
+            summary = if (preferences.wvdDevice.isBlank()) WVD_DEVICE_HINT else "Device Set",
+            getSummary = { if (it.isBlank()) WVD_DEVICE_HINT else "Device Set" },
         )
 
         screen.addEditTextPreference(
-            title = "User-Agent",
-            default = USER_AGENT_DEFAULT,
-            summary = "${PREF_HEADER_WARNING_PREFIX}\n${preferences.userAgent.ifBlank { "User-Agent to use for CR" }}",
             key = USER_AGENT_KEY,
+            default = USER_AGENT_DEFAULT,
+            title = "User-Agent",
+            summary = "$PREF_HEADER_WARNING_PREFIX\n${preferences.userAgent.ifBlank { USER_AGENT_HINT }}",
+            getSummary = { "$PREF_HEADER_WARNING_PREFIX\n${it.ifBlank { USER_AGENT_HINT }}" },
         )
 
         screen.addEditTextPreference(
-            title = "Basic Auth",
-            default = BASIC_AUTH_DEFAULT,
-            summary = PREF_HEADER_WARNING_PREFIX,
             key = BASIC_AUTH_KEY,
+            default = BASIC_AUTH_DEFAULT,
+            title = "Basic Auth",
+            summary = PREF_HEADER_WARNING_PREFIX,
         )
 
-        screen.addPreference(localSubsPreference(screen))
+        screen.addPreference(localTokenPreference(screen))
     }
 
-    // From Jellyfin
-    private abstract class LocalSubsPreference(
-        context: Context,
-    ) : SwitchPreferenceCompat(context) {
-        abstract fun reload()
-    }
+    private fun localTokenPreference(screen: PreferenceScreen) = screen
+        .getSwitchPreference(
+            key = PREF_USE_LOCAL_TOKEN_KEY,
+            default = false,
+            title = "Use Local Token",
+            summary = "${PREF_LOCAL_TOKEN_SUMMARY_PREFIX}Loading...",
+            onChange = { preference, newValue ->
+                // getTokenDetail re-reads the flag, so it has to be on disk before the refresh starts.
+                preferences.edit().putBoolean(PREF_USE_LOCAL_TOKEN_KEY, newValue).commit()
+                refreshTokenSummary(preference, force = true)
+                true
+            },
+        ).also { refreshTokenSummary(it, force = false) }
 
-    private fun localSubsPreference(screen: PreferenceScreen) =
-        object : LocalSubsPreference(screen.context) {
-            override fun reload() {
-                this.apply {
-                    key = PREF_USE_LOCAL_TOKEN_KEY
-                    title = "Use Local Token"
-                    summary = "${PREF_LOCAL_TOKEN_SUMMARY_PREFIX}Loading..."
-                    mainScope.launch(Dispatchers.IO) {
-                        getTokenDetail().let {
-                            withContext(Dispatchers.Main) {
-                                summary = "${PREF_LOCAL_TOKEN_SUMMARY_PREFIX}$it"
-                            }
-                        }
-                    }
-                    setDefaultValue(false)
-                    setOnPreferenceChangeListener { _, newValue ->
-                        val new = newValue as Boolean
-                        preferences.edit().putBoolean(key, new).commit().also {
-                            mainScope.launch(Dispatchers.IO) {
-                                getTokenDetail(true).let {
-                                    withContext(Dispatchers.Main) {
-                                        summary = "${PREF_LOCAL_TOKEN_SUMMARY_PREFIX}$it"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+    private fun refreshTokenSummary(preference: Preference, force: Boolean) {
+        mainScope.launch(Dispatchers.IO) {
+            val detail = getTokenDetail(force)
+            withContext(Dispatchers.Main) {
+                preference.summary = "$PREF_LOCAL_TOKEN_SUMMARY_PREFIX$detail"
             }
-        }.apply { reload() }
-
-    private fun getTokenDetail(force: Boolean = false): String =
-        runCatching {
-            val storedToken = tokenInterceptor.getAccessToken(force)
-            "Token location: " + storedToken.bucket?.substringAfter("/")?.substringBefore("/")
-        }.getOrElse {
-            tokenInterceptor.removeToken()
-            "Error: ${it.localizedMessage ?: "Something Went Wrong"}"
         }
+    }
+
+    private fun getTokenDetail(force: Boolean = false): String = runCatching {
+        val storedToken = tokenInterceptor.getAccessToken(force)
+        "Token location: " + storedToken.bucket?.substringAfter("/")?.substringBefore("/")
+    }.getOrElse {
+        tokenInterceptor.removeToken()
+        "Error: ${it.localizedMessage ?: "Something Went Wrong"}"
+    }
 
     companion object {
         val DATE_FORMATTER by lazy {
@@ -869,8 +804,7 @@ class Yomiroll :
         private const val PREF_QLT_KEY = "preferred_quality"
         private const val PREF_QLT_TITLE = "Preferred quality"
         private const val PREF_QLT_DEFAULT = "1080p"
-        private val PREF_QLT_ENTRIES = arrayOf("1080p", "720p", "480p", "360p", "240p", "80p")
-        private val PREF_QLT_VALUES = PREF_QLT_ENTRIES
+        private val PREF_QLT_ENTRIES = listOf("1080p", "720p", "480p", "360p", "240p", "80p")
 
         private const val PREF_AUD_KEY = "preferred_audio"
         private const val PREF_AUD_TITLE = "Preferred Audio Language"
@@ -883,18 +817,22 @@ class Yomiroll :
         private const val PREF_SUB_TYPE_KEY = "preferred_sub_type"
         private const val PREF_SUB_TYPE_TITLE = "Preferred Sub Type"
         private const val PREF_SUB_TYPE_DEFAULT = "soft"
-        private val PREF_SUB_TYPE_ENTRIES = arrayOf("Softsub", "Hardsub")
-        private val PREF_SUB_TYPE_VALUES = arrayOf("soft", "hard")
+        private val PREF_SUB_TYPE_ENTRIES = listOf("Softsub", "Hardsub")
+        private val PREF_SUB_TYPE_VALUES = listOf("soft", "hard")
 
         const val USERNAME_KEY = "username"
         const val USERNAME_DEFAULT = ""
+        private const val USERNAME_HINT = "Username of your CR account"
 
         const val PASSWORD_KEY = "password"
         const val PASSWORD_DEFAULT = ""
+        private const val PASSWORD_HINT = "Password of your CR account"
 
         const val WVD_DEVICE_KEY = "wvd_device"
         const val WVD_DEVICE_DEFAULT = ""
+        private const val WVD_DEVICE_HINT = "Widevine Device (.wvd) in Base64"
 
+        private const val USER_AGENT_HINT = "User-Agent to use for CR"
         const val USER_AGENT_KEY = "user_agent"
         const val USER_AGENT_DEFAULT = "ANDROIDTV/3.42.1_22273 Android/16"
 

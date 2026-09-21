@@ -57,32 +57,31 @@ class AccessTokenInterceptor(
         }
     }
 
-    private fun Request.newRequestWithAccessToken(tokenData: AccessToken): Request =
-        newBuilder()
-            .let {
-                it.header("Authorization", "${tokenData.token_type} ${tokenData.access_token}")
-                it.header("User-Agent", preferences.userAgent)
-                val requestUrl = Uri.decode(url.toString())
-                if (requestUrl.contains("/cms/v2")) {
-                    it.url(
-                        MessageFormat.format(
-                            requestUrl,
-                            tokenData.bucket,
-                            tokenData.policy,
-                            tokenData.signature,
-                            tokenData.key_pair_id,
-                        ),
-                    )
-                }
-                it.build()
-            }.also {
-                Log.d("Yomiroll", "Authorization: ${tokenData.token_type} ${tokenData.access_token}")
+    private fun Request.newRequestWithAccessToken(tokenData: AccessToken): Request = newBuilder()
+        .let {
+            it.header("Authorization", "${tokenData.token_type} ${tokenData.access_token}")
+            it.header("User-Agent", preferences.userAgent)
+            val requestUrl = Uri.decode(url.toString())
+            if (requestUrl.contains("/cms/v2")) {
+                it.url(
+                    MessageFormat.format(
+                        requestUrl,
+                        tokenData.bucket,
+                        tokenData.policy,
+                        tokenData.signature,
+                        tokenData.key_pair_id,
+                    ),
+                )
             }
+            it.build()
+        }.also {
+            Log.d("Yomiroll", "Authorization: ${tokenData.token_type} ${tokenData.access_token}")
+        }
 
     fun getAccessToken(force: Boolean = false): AccessToken {
         val token = preferences.getString(TOKEN_PREF_KEY, null)
         return if (!force && token != null) {
-            token.toObject()
+            JSON.decodeFromString<AccessToken>(token)
         } else {
             synchronized(this) {
                 if (!preferences.useLocalToken) {
@@ -106,11 +105,10 @@ class AccessTokenInterceptor(
                 if (useProxy) {
                     Authenticator.setDefault(
                         object : Authenticator() {
-                            override fun getPasswordAuthentication(): PasswordAuthentication =
-                                PasswordAuthentication(
-                                    "GeoBypassCommunity-US",
-                                    "UseWithRespect".toCharArray(),
-                                )
+                            override fun getPasswordAuthentication(): PasswordAuthentication = PasswordAuthentication(
+                                "GeoBypassCommunity-US",
+                                "UseWithRespect".toCharArray(),
+                            )
                         },
                     )
                     it
@@ -150,7 +148,7 @@ class AccessTokenInterceptor(
                 DATE_FORMATTER.parse(policyJson.cms.expires)?.time,
             )
 
-        preferences.edit().putString(TOKEN_PREF_KEY, allTokens.toJsonString()).apply()
+        preferences.edit().putString(TOKEN_PREF_KEY, JSON.encodeToString(allTokens)).apply()
         return allTokens
     }
 
