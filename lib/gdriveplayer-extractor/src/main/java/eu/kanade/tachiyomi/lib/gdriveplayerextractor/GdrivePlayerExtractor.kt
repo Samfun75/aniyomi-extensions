@@ -41,7 +41,7 @@ class GdrivePlayerExtractor(private val client: OkHttpClient) {
             .distinctBy { it.groupValues[2] } // remove duplicates by quality
             .map {
                 val qualityStr = it.groupValues[2]
-                val quality = "$playerName ${qualityStr}p - $name"
+                val quality = "$PLAYER_NAME ${qualityStr}p - $name"
                 val videoUrl = "https:" + it.groupValues[1] + "&res=$qualityStr"
                 Video(videoUrl, quality, subtitleTracks = subtitleList)
             }.toList()
@@ -53,12 +53,10 @@ class GdrivePlayerExtractor(private val client: OkHttpClient) {
         return decryptWithSalt(ciphertext, salt, password)
     }
 
-    private fun Regex.getFirst(item: String): String {
-        return find(item)?.groups?.elementAt(1)?.value!!
-    }
+    private fun Regex.getFirst(item: String): String = find(item)?.groups?.elementAt(1)?.value!!
 
     companion object {
-        private const val playerName = "GDRIVE"
+        private const val PLAYER_NAME = "GDRIVE"
 
         private val REGEX_DATAJSON = Regex("data=\"(\\S+?)\";")
         private val REGEX_PASSWORD = Regex("var pass = \"(\\S+?)\"")
