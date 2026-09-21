@@ -1,10 +1,10 @@
 plugins {
-    id("lib-android")
+    alias(proj.plugins.library)
 }
 
 dependencies {
-    implementation(project(":lib:playlist-utils"))
-    implementation("dev.datlag.jsunpacker:jsunpacker:1.0.1") {
+    implementation(projects.lib.playlistUtils)
+    implementation("dev.datlag.jsunpacker:jsunpacker:1.0.2") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
     }
 }

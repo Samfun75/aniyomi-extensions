@@ -1,3 +1,3 @@
 plugins {
-    id("lib-kotlin")
+    alias(proj.plugins.kotlin.library)
 }

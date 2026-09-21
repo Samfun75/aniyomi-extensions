@@ -1,25 +1,19 @@
 plugins {
-    id("com.android.library")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.serialization)
+
+    alias(proj.plugins.android.base)
+    alias(proj.plugins.spotless)
 }
 
 android {
-    compileSdk = AndroidConfig.compileSdk
-    namespace = AndroidConfig.coreNamespace
+    namespace = "eu.kanade.tachiyomi.lib.core"
 
-    defaultConfig {
-        minSdk = AndroidConfig.minSdk
+    buildFeatures {
+        buildConfig = false
     }
+}
 
-    sourceSets {
-        named("main") {
-            manifest.srcFile("AndroidManifest.xml")
-            res.setSrcDirs(listOf("res"))
-        }
-    }
-
-    libraryVariants.all {
-        generateBuildConfigProvider?.configure {
-            enabled = false
-        }
-    }
+dependencies {
+    compileOnly(libs.bundles.common)
 }

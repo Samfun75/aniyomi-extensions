@@ -1,11 +1,13 @@
 plugins {
-    id("lib-multisrc")
+    alias(proj.plugins.theme)
 }
 
-baseVersionCode = 20
+theme {
+    baseVersionCode = 20
+}
 
 dependencies {
-    api(project(":lib:dood-extractor"))
-    api(project(":lib:cryptoaes"))
-    api(project(":lib:playlist-utils"))
+    api(projects.lib.doodExtractor)
+    api(projects.lib.cryptoaes)
+    api(projects.lib.playlistUtils)
 }

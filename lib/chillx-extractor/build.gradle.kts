@@ -1,8 +1,8 @@
 plugins {
-    id("lib-android")
+    alias(proj.plugins.library)
 }
 
 dependencies {
-    implementation(project(":lib:cryptoaes"))
-    implementation(project(":lib:playlist-utils"))
+    implementation(projects.lib.cryptoaes)
+    implementation(projects.lib.playlistUtils)
 }

@@ -1,5 +1,7 @@
 plugins {
-    id("lib-multisrc")
+    alias(proj.plugins.theme)
 }
 
-baseVersionCode = 2
+theme {
+    baseVersionCode = 2
+}

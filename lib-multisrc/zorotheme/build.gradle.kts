@@ -1,10 +1,12 @@
 plugins {
-    id("lib-multisrc")
+    alias(proj.plugins.theme)
 }
 
-baseVersionCode = 3
+theme {
+    baseVersionCode = 3
+}
 
 dependencies {
-    api(project(":lib:megacloud-extractor"))
-    api(project(":lib:streamtape-extractor"))
+    api(projects.lib.megacloudExtractor)
+    api(projects.lib.streamtapeExtractor)
 }

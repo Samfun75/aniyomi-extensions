@@ -1,3 +1,3 @@
 plugins {
-    id("lib-android")
+    alias(proj.plugins.library)
 }
