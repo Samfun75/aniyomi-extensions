@@ -15,6 +15,13 @@ class SpotlessPlugin : Plugin<Project> {
 
         // Configuration should be synced with [/gradle/build-logic/build.gradle.kts]
         val ktlintVersion = libs.ktlint.bom.get().version
+        val xmlTarget = arrayOf("src/**/*.xml", "AndroidManifest.xml")
+        // A format with no matching file breaks spotless' bookkeeping under --rerun-tasks.
+        val hasXml = !fileTree(projectDir) {
+            include(*xmlTarget)
+            exclude("**/build/**")
+        }.isEmpty
+
         spotless {
             kotlin {
                 // The root project's globs reach into every module, including their build directories.
@@ -26,11 +33,13 @@ class SpotlessPlugin : Plugin<Project> {
                 endWithNewline()
             }
 
-            format("xml") {
-                targetExclude("**/build/**")
-                target("src/**/*.xml", "AndroidManifest.xml")
-                trimTrailingWhitespace()
-                endWithNewline()
+            if (hasXml) {
+                format("xml") {
+                    targetExclude("**/build/**")
+                    target(*xmlTarget)
+                    trimTrailingWhitespace()
+                    endWithNewline()
+                }
             }
         }
     }
