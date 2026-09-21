@@ -26,13 +26,6 @@ class SpotlessPlugin : Plugin<Project> {
                 endWithNewline()
             }
 
-            format("gradle") {
-                targetExclude("**/build/**")
-                target("*.gradle")
-                trimTrailingWhitespace()
-                endWithNewline()
-            }
-
             format("xml") {
                 targetExclude("**/build/**")
                 target("src/**/*.xml", "AndroidManifest.xml")
