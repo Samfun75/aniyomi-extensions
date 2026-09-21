@@ -5,6 +5,7 @@ package extensions.utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 /**
@@ -44,3 +45,8 @@ suspend inline fun <A, B> Iterable<A>.parallelCatchingFlatMap(crossinline f: sus
         }
     }.awaitAll().flatten()
 }
+
+/**
+ * Blocking version of [parallelCatchingFlatMap], for the non-suspending parse callbacks.
+ */
+inline fun <A, B> Iterable<A>.parallelCatchingFlatMapBlocking(crossinline f: suspend (A) -> Iterable<B>): List<B> = runBlocking { parallelCatchingFlatMap(f) }

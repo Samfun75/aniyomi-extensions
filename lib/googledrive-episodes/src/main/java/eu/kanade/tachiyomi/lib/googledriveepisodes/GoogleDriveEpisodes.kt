@@ -4,16 +4,20 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
-import eu.kanade.tachiyomi.util.parseAs
+import extensions.utils.parseAs
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
+import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
 
 class GoogleDriveEpisodes(private val client: OkHttpClient, private val headers: Headers) {
+    private val json: Json by injectLazy()
+
     // Lots of code borrowed from https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/googledrive.py under the `GoogleDriveFolderIE` class
     fun getEpisodesFromFolder(folderId: String, path: String, maxRecDepth: Int, trimNames: Boolean): List<SEpisode> {
         val episodeList = mutableListOf<SEpisode>()
@@ -76,7 +80,7 @@ class GoogleDriveEpisodes(private val client: OkHttpClient, private val headers:
                     POST(postUrl, body = body, headers = postHeaders),
                 ).execute()
 
-                val parsed = response.parseAs<GDrivePostResponse> {
+                val parsed = response.parseAs<GDrivePostResponse>(json) {
                     JSON_REGEX.find(it)!!.groupValues[1]
                 }
 

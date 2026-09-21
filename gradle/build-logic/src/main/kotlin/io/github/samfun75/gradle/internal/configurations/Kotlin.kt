@@ -8,9 +8,10 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinBaseExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinCommonCompilerOptions
 import tapmoc.configureJavaCompatibility
 
-internal fun Project.configureKotlin() {
+internal fun Project.configureKotlin(serialization: Boolean = true) {
     configureJavaCompatibility(proj.versions.java.get().toInt())
 
+    if (!serialization) return
     kotlin {
         compilerOptions {
             optIn.add("kotlinx.serialization.ExperimentalSerializationApi")

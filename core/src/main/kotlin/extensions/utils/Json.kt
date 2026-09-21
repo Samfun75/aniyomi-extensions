@@ -14,21 +14,19 @@ import okhttp3.Response
  * Parses JSON string into an object of type [T].
  */
 context(source: Source)
-inline fun <reified T> String.parseAs(json: Json = source.json): T = json.decodeFromString(this)
+inline fun <reified T> String.parseAs(): T = source.json.decodeFromString(this)
 
 /**
  * Parses the response body into an object of type [T].
  */
 context(source: Source)
-inline fun <reified T> Response.parseAs(json: Json = source.json): T = use {
-    json.decodeFromBufferedSource(serializer(), it.body.source())
-}
+inline fun <reified T> Response.parseAs(): T = parseAs(source.json)
 
 /**
  * Serializes the object to a JSON string.
  */
 context(source: Source)
-inline fun <reified T> T.toJsonString(json: Json = source.json): String = json.encodeToString(this)
+inline fun <reified T> T.toJsonString(): String = source.json.encodeToString(this)
 
 /**
  * Converts a string into a JSON request body.
@@ -40,3 +38,21 @@ fun String.toJsonBody(): RequestBody = this.toRequestBody("application/json; cha
  */
 context(source: Source)
 inline fun <reified T> T.toRequestBody(): RequestBody = this.toJsonString().toJsonBody()
+
+/**
+ * Parses the response body into an object of type [T] with an explicit [json], for code
+ * that has no [Source] in scope.
+ */
+inline fun <reified T> Response.parseAs(json: Json): T = use {
+    json.decodeFromBufferedSource(serializer(), it.body.source())
+}
+
+/**
+ * Parses the response body into an object of type [T] after rewriting it with [transform].
+ */
+inline fun <reified T> Response.parseAs(json: Json, transform: (String) -> String): T = use { json.decodeFromString(transform(it.body.string())) }
+
+/**
+ * Parses JSON string into an object of type [T] with an explicit [json].
+ */
+inline fun <reified T> String.parseAs(json: Json): T = json.decodeFromString(this)

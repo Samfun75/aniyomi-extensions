@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.util.parseAs
+import extensions.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -45,7 +45,7 @@ class DailymotionExtractor(private val client: OkHttpClient, private val headers
         }
 
         val jsonUrl = "$DAILYMOTION_URL/player/metadata/video/$videoQuery?locale=en-US&dmV1st=$v1st&dmTs=$ts&is_native_app=0"
-        val parsed = client.newCall(GET(jsonUrl)).execute().parseAs<DailyQuality>()
+        val parsed = client.newCall(GET(jsonUrl)).execute().parseAs<DailyQuality>(json)
 
         return when {
             parsed.qualities != null && parsed.error == null -> videosFromDailyResponse(parsed, prefix)
@@ -81,7 +81,7 @@ class DailymotionExtractor(private val client: OkHttpClient, private val headers
             .build()
 
         val tokenResponse = client.newCall(POST(postUrl, headersBuilder(), tokenBody)).execute()
-        val tokenParsed = tokenResponse.parseAs<TokenResponse>()
+        val tokenParsed = tokenResponse.parseAs<TokenResponse>(json)
 
         val idUrl = "$GRAPHQL_URL/"
         val idHeaders = headersBuilder {
@@ -100,7 +100,7 @@ class DailymotionExtractor(private val client: OkHttpClient, private val headers
         """.trimIndent().toRequestBody("application/json".toMediaType())
 
         val idResponse = client.newCall(POST(idUrl, idHeaders, idData)).execute()
-        val idParsed = idResponse.parseAs<ProtectedResponse>().data.video
+        val idParsed = idResponse.parseAs<ProtectedResponse>(json).data.video
 
         val dmvk = htmlString.substringAfter("\"dmvk\":\"").substringBefore('"')
         val getVideoIdUrl = "$DAILYMOTION_URL/player/metadata/video/${idParsed.xid}?embedder=${"$baseUrl/"}&locale=en-US&dmV1st=$v1st&dmTs=$ts&is_native_app=0"
@@ -110,7 +110,7 @@ class DailymotionExtractor(private val client: OkHttpClient, private val headers
         }
 
         val parsed = client.newCall(GET(getVideoIdUrl, getVideoIdHeaders)).execute()
-            .parseAs<DailyQuality>()
+            .parseAs<DailyQuality>(json)
 
         return videosFromDailyResponse(parsed, prefix, getVideoIdHeaders)
     }

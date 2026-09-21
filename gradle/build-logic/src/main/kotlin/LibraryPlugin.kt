@@ -1,6 +1,7 @@
 import com.android.build.api.dsl.LibraryExtension
 import io.github.samfun75.gradle.internal.extensions.alias
 import io.github.samfun75.gradle.internal.extensions.compileOnly
+import io.github.samfun75.gradle.internal.extensions.implementation
 import io.github.samfun75.gradle.internal.extensions.libs
 import io.github.samfun75.gradle.internal.extensions.plugins
 import io.github.samfun75.gradle.internal.extensions.proj
@@ -25,6 +26,7 @@ class LibraryPlugin : Plugin<Project> {
         }
 
         dependencies {
+            implementation(project(":core"))
             compileOnly(libs.bundles.common)
         }
     }

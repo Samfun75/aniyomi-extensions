@@ -71,7 +71,6 @@ class CloudflareInterceptor(private val client: OkHttpClient) : Interceptor {
             with(webview.settings) {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                databaseEnabled = true
                 useWideViewPort = true
                 loadWithOverviewMode = false
                 userAgentString = request.header("User-Agent")

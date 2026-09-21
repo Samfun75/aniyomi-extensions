@@ -153,8 +153,8 @@ class AccessTokenInterceptor(
     }
 
     private fun getRequest(): Request {
-        val userName = URLEncoder.encode(preferences.username)
-        val password = URLEncoder.encode(preferences.password)
+        val userName = URLEncoder.encode(preferences.username, "UTF-8")
+        val password = URLEncoder.encode(preferences.password, "UTF-8")
         val userAgent = preferences.userAgent
         val basicAuth = preferences.basicAuth
         val deviceId = preferences.deviceId

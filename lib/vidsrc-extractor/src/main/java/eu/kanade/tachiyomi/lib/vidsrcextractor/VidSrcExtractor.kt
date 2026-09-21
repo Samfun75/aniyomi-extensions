@@ -6,19 +6,23 @@ import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.lib.playlistutils.PlaylistUtils
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.util.parseAs
+import extensions.utils.parseAs
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import uy.kohesive.injekt.injectLazy
 import java.net.URLDecoder
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
 @OptIn(ExperimentalSerializationApi::class)
 class VidsrcExtractor(private val client: OkHttpClient, private val headers: Headers) {
+
+    private val json: Json by injectLazy()
 
     private val playlistUtils by lazy { PlaylistUtils(client, headers) }
 
@@ -30,7 +34,7 @@ class VidsrcExtractor(private val client: OkHttpClient, private val headers: Hea
     private val keys by lazy {
         noCacheClient.newCall(
             GET("https://raw.githubusercontent.com/KillerDogeEmpire/vidplay-keys/keys/keys.json", cache = cacheControl),
-        ).execute().parseAs<List<String>>()
+        ).execute().parseAs<List<String>>(json)
     }
 
     fun videosFromUrl(embedLink: String, hosterName: String, type: String = "", subtitleList: List<Track> = emptyList()): List<Video> {
@@ -49,16 +53,16 @@ class VidsrcExtractor(private val client: OkHttpClient, private val headers: Hea
         ).execute()
 
         val data = runCatching {
-            response.parseAs<MediaResponseBody>()
+            response.parseAs<MediaResponseBody>(json)
         }.getOrElse {
             // Keys are out of date
             val newKeys = noCacheClient.newCall(
                 GET("https://raw.githubusercontent.com/KillerDogeEmpire/vidplay-keys/keys/keys.json", cache = cacheControl),
-            ).execute().parseAs<List<String>>()
+            ).execute().parseAs<List<String>>(json)
             val newApiUrL = getApiUrl(embedLink, newKeys)
             client.newCall(
                 GET(newApiUrL, apiHeaders),
-            ).execute().parseAs()
+            ).execute().parseAs<MediaResponseBody>(json)
         }
 
         return playlistUtils.extractFromHls(

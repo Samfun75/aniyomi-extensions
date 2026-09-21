@@ -19,7 +19,7 @@ class KotlinLibraryPlugin : Plugin<Project> {
             alias(proj.plugins.spotless)
         }
 
-        configureKotlin()
+        configureKotlin(serialization = false)
 
         dependencies {
             compileOnly(libs.kotlin.stdlib)
