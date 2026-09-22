@@ -2,10 +2,10 @@
   {
     "name": "Aniyomi: Yomiroll",
     "pkg": "eu.kanade.tachiyomi.animeextension.all.yomiroll",
-    "apk": "aniyomi-all.yomiroll-v17.3.apk",
+    "apk": "aniyomi-all.yomiroll-v17.4.apk",
     "lang": "all",
-    "code": 17003,
-    "version": "17.3",
+    "code": 17004,
+    "version": "17.4",
     "nsfw": 0,
     "hasReadme": 0,
     "hasChangelog": 0,
