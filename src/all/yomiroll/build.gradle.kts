@@ -4,7 +4,7 @@ plugins {
 
 extension {
     name = "Yomiroll"
-    versionCode = 3
+    versionCode = 4
 }
 
 dependencies {
