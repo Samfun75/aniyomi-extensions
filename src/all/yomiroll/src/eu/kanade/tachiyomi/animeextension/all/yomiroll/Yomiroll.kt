@@ -714,6 +714,15 @@ class Yomiroll : Source() {
         )
 
         screen.addEditTextPreference(
+            key = REFRESH_TOKEN_KEY,
+            default = REFRESH_TOKEN_DEFAULT,
+            title = "Refresh Token",
+            summary = preferences.refreshToken.maskOr(REFRESH_TOKEN_HINT),
+            getSummary = { it.maskOr(REFRESH_TOKEN_HINT) },
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+        )
+
+        screen.addEditTextPreference(
             key = WVD_DEVICE_KEY,
             default = WVD_DEVICE_DEFAULT,
             title = "WVD Device",
@@ -803,6 +812,10 @@ class Yomiroll : Source() {
         const val PASSWORD_KEY = "password"
         const val PASSWORD_DEFAULT = ""
         private const val PASSWORD_HINT = "Password of your CR account"
+
+        const val REFRESH_TOKEN_KEY = "refresh_token"
+        const val REFRESH_TOKEN_DEFAULT = ""
+        private const val REFRESH_TOKEN_HINT = "Alternative to username and password, takes priority when set"
 
         const val WVD_DEVICE_KEY = "wvd_device"
         const val WVD_DEVICE_DEFAULT = ""

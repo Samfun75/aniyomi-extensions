@@ -21,6 +21,7 @@ data class AccessToken(
     val key_pair_id: String? = null,
     val bucket: String? = null,
     val policyExpire: Long? = null,
+    val refresh_token: String? = null,
 )
 
 @Serializable

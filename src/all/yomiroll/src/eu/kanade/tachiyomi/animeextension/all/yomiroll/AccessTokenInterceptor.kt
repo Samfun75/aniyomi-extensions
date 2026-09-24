@@ -130,6 +130,7 @@ class AccessTokenInterceptor(
 
         val body = response.body.string()
         val parsedJson = JSON.decodeFromString<AccessToken>(body)
+        saveRotatedRefreshToken(parsedJson)
 
         val policy =
             client
@@ -153,29 +154,42 @@ class AccessTokenInterceptor(
     }
 
     private fun getRequest(): Request {
-        val userName = URLEncoder.encode(preferences.username, "UTF-8")
-        val password = URLEncoder.encode(preferences.password, "UTF-8")
-        val userAgent = preferences.userAgent
-        val basicAuth = preferences.basicAuth
-        val deviceId = preferences.deviceId
-
-        require(userName.isNotEmpty() && password.isNotEmpty()) {
-            "Set your username and password in the extension settings."
-        }
-
         val headers =
             Headers
                 .Builder()
                 .add("Content-Type", "application/x-www-form-urlencoded")
-                .add("Authorization", "Basic $basicAuth")
-                .add("User-Agent", userAgent)
+                .add("Authorization", "Basic ${preferences.basicAuth}")
+                .add("User-Agent", preferences.userAgent)
                 .build()
         val postBody =
-            "grant_type=password&username=$userName&password=$password&scope=offline_access&device_type=CPH2449&device_id=$deviceId"
+            (if (preferences.refreshToken.isNotEmpty()) refreshTokenGrant() else passwordGrant())
                 .toRequestBody(
                     "application/x-www-form-urlencoded".toMediaType(),
                 )
         return POST("$crUrl/auth/v1/token", headers, postBody)
+    }
+
+    private fun refreshTokenGrant(): String {
+        val refreshToken = URLEncoder.encode(preferences.refreshToken, "UTF-8")
+        return "grant_type=refresh_token&refresh_token=$refreshToken&scope=offline_access"
+    }
+
+    private fun passwordGrant(): String {
+        val userName = URLEncoder.encode(preferences.username, "UTF-8")
+        val password = URLEncoder.encode(preferences.password, "UTF-8")
+
+        require(userName.isNotEmpty() && password.isNotEmpty()) {
+            "Set your username and password, or a refresh token, in the extension settings."
+        }
+
+        return "grant_type=password&username=$userName&password=$password&scope=offline_access&device_type=CPH2449&device_id=${preferences.deviceId}"
+    }
+
+    private fun saveRotatedRefreshToken(token: AccessToken) {
+        val rotated = token.refresh_token?.takeIf { it.isNotBlank() } ?: return
+        if (preferences.refreshToken.isNotEmpty() && rotated != preferences.refreshToken) {
+            preferences.edit().putString(Yomiroll.REFRESH_TOKEN_KEY, rotated).apply()
+        }
     }
 
     companion object {

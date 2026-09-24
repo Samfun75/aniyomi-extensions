@@ -61,6 +61,9 @@ val SharedPreferences.username
 val SharedPreferences.password
     get() = getString(Yomiroll.PASSWORD_KEY, Yomiroll.PASSWORD_DEFAULT)!!.trim()
 
+val SharedPreferences.refreshToken
+    get() = getString(Yomiroll.REFRESH_TOKEN_KEY, Yomiroll.REFRESH_TOKEN_DEFAULT)!!.trim()
+
 val SharedPreferences.wvdDevice
     get() = getString(Yomiroll.WVD_DEVICE_KEY, Yomiroll.WVD_DEVICE_DEFAULT)!!.trim()
 
