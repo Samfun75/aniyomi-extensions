@@ -745,6 +745,23 @@ class Yomiroll : Source() {
             summary = PREF_HEADER_WARNING_PREFIX,
         )
 
+        screen.addEditTextPreference(
+            key = DEVICE_ID_KEY,
+            default = preferences.deviceId,
+            title = "Device ID",
+            summary = "$DEVICE_ID_HINT\n${preferences.deviceId}",
+            getSummary = { "$DEVICE_ID_HINT\n$it" },
+            allowBlank = false,
+        )
+
+        screen.addEditTextPreference(
+            key = DEVICE_TYPE_KEY,
+            default = DEVICE_TYPE_DEFAULT,
+            title = "Device Type",
+            summary = "$PREF_HEADER_WARNING_PREFIX\n${preferences.deviceType}",
+            getSummary = { "$PREF_HEADER_WARNING_PREFIX\n$it" },
+        )
+
         screen.addPreference(localTokenPreference(screen))
     }
 
@@ -823,13 +840,17 @@ class Yomiroll : Source() {
 
         private const val USER_AGENT_HINT = "User-Agent to use for CR"
         const val USER_AGENT_KEY = "user_agent"
-        const val USER_AGENT_DEFAULT = "ANDROIDTV/3.42.1_22273 Android/16"
+        const val USER_AGENT_DEFAULT = "ANDROIDTV/3.70.0 Android/16"
 
         const val BASIC_AUTH_KEY = "basic_auth"
         const val BASIC_AUTH_DEFAULT =
-            "Y2I5bnpybWh0MzJ2Z3RleHlna286S1V3bU1qSlh4eHVyc0hJVGQxenZsMkMyeVFhUW84TjQ="
+            "ZXZ4YzVybGN1bnd4cm91YWpmeHI6NkJGWGM1SUk3UWx2Z3NFbzdiVjBuWUNfN1VRLXVlSVM="
 
         const val DEVICE_ID_KEY = "device_id"
+        private const val DEVICE_ID_HINT = "Use the device ID your refresh token was issued with"
+
+        const val DEVICE_TYPE_KEY = "device_type"
+        const val DEVICE_TYPE_DEFAULT = "Google sdk_gphone64_x86_64"
 
         const val PREF_USE_LOCAL_TOKEN_KEY = "preferred_local_Token"
         const val PREF_LOCAL_TOKEN_SUMMARY_PREFIX =

@@ -73,8 +73,12 @@ val SharedPreferences.userAgent
 val SharedPreferences.basicAuth
     get() = getString(Yomiroll.BASIC_AUTH_KEY, Yomiroll.BASIC_AUTH_DEFAULT)!!.trim()
 
-val SharedPreferences.deviceId
-    get() = getString(Yomiroll.DEVICE_ID_KEY, UUID.randomUUID().toString())!!.trim()
+val SharedPreferences.deviceId: String
+    get() = getString(Yomiroll.DEVICE_ID_KEY, null)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: UUID.randomUUID().toString().also { edit().putString(Yomiroll.DEVICE_ID_KEY, it).apply() }
+
+val SharedPreferences.deviceType
+    get() = getString(Yomiroll.DEVICE_TYPE_KEY, Yomiroll.DEVICE_TYPE_DEFAULT)!!.trim()
 
 val SharedPreferences.useLocalToken
     get() = getBoolean(Yomiroll.PREF_USE_LOCAL_TOKEN_KEY, false)

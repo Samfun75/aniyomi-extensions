@@ -161,8 +161,11 @@ class AccessTokenInterceptor(
                 .add("Authorization", "Basic ${preferences.basicAuth}")
                 .add("User-Agent", preferences.userAgent)
                 .build()
+        val grant = if (preferences.refreshToken.isNotEmpty()) refreshTokenGrant() else passwordGrant()
+        val deviceId = URLEncoder.encode(preferences.deviceId, "UTF-8")
+        val deviceType = URLEncoder.encode(preferences.deviceType, "UTF-8")
         val postBody =
-            (if (preferences.refreshToken.isNotEmpty()) refreshTokenGrant() else passwordGrant())
+            "$grant&scope=offline_access&device_id=$deviceId&device_type=$deviceType"
                 .toRequestBody(
                     "application/x-www-form-urlencoded".toMediaType(),
                 )
@@ -171,7 +174,7 @@ class AccessTokenInterceptor(
 
     private fun refreshTokenGrant(): String {
         val refreshToken = URLEncoder.encode(preferences.refreshToken, "UTF-8")
-        return "grant_type=refresh_token&refresh_token=$refreshToken&scope=offline_access"
+        return "grant_type=refresh_token&refresh_token=$refreshToken"
     }
 
     private fun passwordGrant(): String {
@@ -182,7 +185,7 @@ class AccessTokenInterceptor(
             "Set your username and password, or a refresh token, in the extension settings."
         }
 
-        return "grant_type=password&username=$userName&password=$password&scope=offline_access&device_type=CPH2449&device_id=${preferences.deviceId}"
+        return "grant_type=password&username=$userName&password=$password"
     }
 
     private fun saveRotatedRefreshToken(token: AccessToken) {
