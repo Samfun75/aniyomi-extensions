@@ -24,7 +24,7 @@ coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", ve
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines_version" }
 
 injekt-core = { module = "com.github.mihonapp:injekt", version = "91edab2317" }
-ktvine = { module = "io.github.samfun75:ktvine", version = "1.0.0-RC2" }
+ktvine = { module = "io.github.samfun75:ktvine", version = "1.0.0-RC3" }
 jsoup = { module = "org.jsoup:jsoup", version = "1.22.2" }
 # jsoup declares jspecify as `provided`, so its nullability annotations need to be added back by hand.
 jspecify = { module = "org.jspecify:jspecify", version = "1.0.1" }
