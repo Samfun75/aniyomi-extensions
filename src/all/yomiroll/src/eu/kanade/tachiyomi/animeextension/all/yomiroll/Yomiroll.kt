@@ -381,6 +381,10 @@ class Yomiroll : Source() {
             doc
                 .selectFirst("contentprotection[schemeiduri*=edef8ba9-79d6-4ace-a3c8-27dcd51d21ed]")
                 ?.text() ?: ""
+        val defaultKid =
+            doc.select("contentprotection").firstNotNullOfOrNull { element ->
+                element.attributes().firstOrNull { it.key.endsWith("default_kid", ignoreCase = true) }?.value
+            }
 
         val argsMpv = mutableListOf<Pair<String, String>>()
         val argsFFM = mutableListOf<Pair<String, String>>()
@@ -389,7 +393,8 @@ class Yomiroll : Source() {
             mediaId,
             streams.token,
             psshB64,
-        )?.map { (keyType, key) ->
+            defaultKid,
+        )?.forEach { (keyType, key) ->
             argsMpv.addAll(
                 listOf(
                     Pair("demuxer-lavf-o", "${keyType.type}=$key"),
@@ -503,6 +508,7 @@ class Yomiroll : Source() {
         mediaId: String,
         videoToken: String,
         psshBase64: String,
+        defaultKid: String?,
     ): List<Pair<DecryptionType, String>>? {
         Log.i("Yomiroll", "Getting Widevine key for mediaId: $mediaId")
 
@@ -547,7 +553,10 @@ class Yomiroll : Source() {
 
         cdm.parseLicense(sessionId, license)
 
-        return cdm.getKeys(sessionId, KeyType.CONTENT).map {
+        // The license carries a key per track profile, and mpv keeps only the last decryption key it is given.
+        val keys = cdm.getKeys(sessionId, KeyType.CONTENT)
+        val streamKeys = keys.filter { it.kid.toString().equals(defaultKid, ignoreCase = true) }.ifEmpty { keys }
+        return streamKeys.map {
             Pair(DecryptionType.CENC_DECRYPTION_KEY, it.key.toHexString())
         }
     }
