@@ -468,7 +468,8 @@ class Yomiroll : Source() {
             }
         }
 
-        val videoSelector = "representation[mimeType*=video],representation[id*=video]"
+        val videoSelector =
+            "representation[mimeType*=video],representation[id*=video],adaptationset[mimeType*=video] > representation"
 
         return doc.select(videoSelector).map { element ->
             val quality = element.attr("height")
