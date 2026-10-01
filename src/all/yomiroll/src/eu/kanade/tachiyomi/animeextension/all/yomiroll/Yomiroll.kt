@@ -401,12 +401,7 @@ class Yomiroll : Source() {
                     Pair("tls-verify", "no"),
                 ),
             )
-            argsFFM.addAll(
-                listOf(
-                    Pair(keyType.type, key),
-                    Pair("tls_verify", "0"),
-                ),
-            )
+            argsFFM.add(Pair(keyType.type, key))
         }
 
         val skipId = streams.versions.find { v -> v.original }?.mediaId ?: mediaId
@@ -498,7 +493,7 @@ class Yomiroll : Source() {
                 videoTitle = "${quality}p ",
                 subtitleTracks = subsList,
                 mpvArgs = argsMpv,
-                ffmpegVideoArgs = argsFFM,
+                ffmpegStreamArgs = argsFFM,
                 timestamps = skipTimes,
             )
         }
